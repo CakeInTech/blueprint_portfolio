@@ -1,0 +1,85 @@
+# Local Postgres for development. Compose reads `.env` in this directory for
+# ${VAR} substitution — keep POSTGRES_* and DATABASE_URL in sync (same user,
+# password, database name; app on the host uses localhost as the host).
+#
+# Start:  docker compose up -d
+# Stop:   docker compose down
+# Logs:   docker compose logs -f db
+# MinIO:  docker compose logs -f minio   (API default :19000, console :19001)
+#
+# Troubleshooting "role does not exist" with a FRESH volume: another Postgres may
+# be answering on that port (e.g. Homebrew on 5432). Use a non-default host port
+# (see POSTGRES_PUBLISH_PORT) so DATABASE_URL hits this container only.
+#
+# "Bind … port is already allocated": pick a free port, e.g. POSTGRES_PUBLISH_PORT=15433
+# in `.env`, match DATABASE_URL …@localhost:15433/…, then `docker compose up -d`.
+#
+# POSTGRES_USER is only applied on FIRST data init. To change credentials after
+# init, reset the volume (deletes all local DB data):
+#   docker compose down -v && docker compose up -d
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cakeintech-portfolio-db
+    restart: unless-stopped
+    environment:
+      # Defaults match the official image convention (superuser "postgres").
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-portfolio}
+    ports:
+      # 15432 avoids 5432 (local Postgres) and 5433 (often used by other stacks).
+      - "127.0.0.1:${POSTGRES_PUBLISH_PORT:-15432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # S3-compatible object storage for CMS hero uploads (path-style, public read on bucket).
+  # Console: http://127.0.0.1:${MINIO_CONSOLE_PUBLISH_PORT:-19001} (default minioadmin / minioadmin).
+  minio:
+    image: minio/minio:latest
+    container_name: cakeintech-portfolio-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "127.0.0.1:${MINIO_PUBLISH_PORT:-19000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PUBLISH_PORT:-19001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: cakeintech-portfolio-minio-init
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "${MINIO_ROOT_USER:-minioadmin}" "${MINIO_ROOT_PASSWORD:-minioadmin}" &&
+        mc mb "local/${MINIO_BUCKET:-portfolio-media}" --ignore-existing &&
+        mc anonymous set download "local/${MINIO_BUCKET:-portfolio-media}"
+
+volumes:
+  postgres_data:
+  minio_data:
