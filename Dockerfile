@@ -5,7 +5,7 @@ ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 
 FROM base AS deps
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml pnpm.json ./
 RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
@@ -26,14 +26,22 @@ RUN corepack enable
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+# Public assets
+COPY --from=builder /app/public ./public
+
+# Standalone Next.js app (includes its own minimal node_modules)
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Migration files — must come after standalone so tsx/drizzle-orm are available
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml pnpm.json tsconfig.json ./
 COPY scripts ./scripts
 COPY drizzle ./drizzle
 COPY lib ./lib
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Full node_modules copied LAST so it wins over the standalone's minimal copy.
+# This gives the pre-deploy migration access to tsx, drizzle-kit, etc.
+COPY --from=deps /app/node_modules ./node_modules
 
 USER nextjs
 
