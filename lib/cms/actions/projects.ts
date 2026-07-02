@@ -11,6 +11,8 @@ import {
   projects,
   projectStackItems,
 } from "@/lib/db/schema";
+import { revalidatePath } from "next/cache";
+import { uploadProjectImageFromFile } from "@/lib/cms/project-image-upload";
 
 export type ProjectStackItemRecord = {
   id: string;
@@ -33,6 +35,7 @@ export type ProjectRecord = {
   year: string;
   tag: string | null;
   color: string | null;
+  imageUrl: string | null;
   blurb: string;
   sortOrder: number;
   stack: ProjectStackItemRecord[];
@@ -95,6 +98,7 @@ export async function getProjectEditorData(): Promise<ProjectRecord[]> {
     year: row.year,
     tag: row.tag,
     color: row.color,
+    imageUrl: row.imageUrl,
     blurb: row.blurb,
     sortOrder: row.sortOrder,
     stack: stackRows
@@ -591,4 +595,85 @@ export async function reorderProjectMetrics(
     entityId: parsedProjectId,
     metadata: { orderedIds: parsedIds },
   });
+}
+
+export type ProjectImageActionResult =
+  | { ok: true; url: string | null }
+  | { ok: false; message: string };
+
+/** Uploads a showcase image/mockup for a project and publishes it. */
+export async function uploadProjectImage(
+  projectId: string,
+  formData: FormData,
+): Promise<ProjectImageActionResult> {
+  const { email } = await requireAdmin();
+  const parsedId = projectIdSchema.parse(projectId);
+  const db = getDb();
+
+  const [existing] = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.id, parsedId))
+    .limit(1);
+  if (!existing) return { ok: false, message: "Project not found." };
+
+  const file = formData.get("projectImageFile");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, message: "Pick an image file first." };
+  }
+
+  const uploaded = await uploadProjectImageFromFile(parsedId, file);
+  if (!uploaded.ok) return { ok: false, message: uploaded.message };
+
+  await db
+    .update(projects)
+    .set({
+      imageUrl: uploaded.url,
+      version: sql`${projects.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(eq(projects.id, parsedId));
+
+  await writeAuditEvent({
+    actorEmail: email,
+    action: "project.image.upload",
+    entityType: "project",
+    entityId: parsedId,
+    metadata: { url: uploaded.url },
+  });
+
+  revalidatePath("/");
+  revalidatePath("/cms");
+
+  return { ok: true, url: uploaded.url };
+}
+
+/** Removes a project's showcase image (tile falls back to the schematic). */
+export async function clearProjectImage(
+  projectId: string,
+): Promise<ProjectImageActionResult> {
+  const { email } = await requireAdmin();
+  const parsedId = projectIdSchema.parse(projectId);
+  const db = getDb();
+
+  await db
+    .update(projects)
+    .set({
+      imageUrl: null,
+      version: sql`${projects.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(eq(projects.id, parsedId));
+
+  await writeAuditEvent({
+    actorEmail: email,
+    action: "project.image.clear",
+    entityType: "project",
+    entityId: parsedId,
+  });
+
+  revalidatePath("/");
+  revalidatePath("/cms");
+
+  return { ok: true, url: null };
 }

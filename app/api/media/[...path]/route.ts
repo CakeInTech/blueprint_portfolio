@@ -8,7 +8,7 @@ import { getHeroS3Config } from "@/lib/storage/hero-s3";
  */
 
 // Only CMS-managed prefixes are reachable — never arbitrary bucket keys.
-const ALLOWED_PREFIXES = ["hero/", "resume/"];
+const ALLOWED_PREFIXES = ["hero/", "resume/", "projects/"];
 
 export async function GET(
   _req: Request,

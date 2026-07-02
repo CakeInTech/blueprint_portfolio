@@ -400,6 +400,8 @@ export type Project = {
   year: string;
   tag?: string;
   color?: string;
+  /** Uploaded showcase image/mockup; falls back to the schematic visual */
+  imageUrl?: string | null;
   blurb: string;
   stack: string[];
   metrics: Stat[];

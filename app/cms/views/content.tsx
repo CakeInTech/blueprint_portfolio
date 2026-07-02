@@ -31,6 +31,7 @@ import {
 import {
   addProjectMetric,
   addProjectStackItem,
+  clearProjectImage,
   createProject,
   deleteProject,
   deleteProjectMetric,
@@ -42,6 +43,7 @@ import {
   updateProject,
   updateProjectMetric,
   updateProjectStackItem,
+  uploadProjectImage,
   type ProjectRecord,
 } from "@/lib/cms/actions/projects";
 import {
@@ -1760,14 +1762,77 @@ export function ProjectsEditor() {
               <div
                 style={{
                   position: "relative",
-                  height: 100,
-                  marginBottom: 16,
+                  height: cur.imageUrl ? 170 : 100,
+                  marginBottom: 10,
                   border: "1px dashed var(--rule)",
-                  background: cur.color || "transparent",
+                  background: cur.imageUrl ? "var(--ink)" : cur.color || "transparent",
                   overflow: "hidden",
                 }}
               >
-                <ProjectVisual name={cur.name} color={cur.color} />
+                {cur.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- CMS showcase preview
+                  <img
+                    src={cur.imageUrl}
+                    alt={`${cur.name} showcase`}
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      objectPosition: "center top",
+                      display: "block",
+                    }}
+                  />
+                ) : (
+                  <ProjectVisual name={cur.name} color={cur.color} />
+                )}
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <FileDropzone
+                  name="projectImageFile"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  acceptTypes={HERO_IMAGE_TYPES}
+                  hint="Showcase image / mockup — JPEG · PNG · WebP · GIF, up to 15 MB. Uploads instantly and shows on the landing-page tile."
+                  file={null}
+                  onFile={(f) => {
+                    if (!f || !cur) return;
+                    setStatus("Uploading showcase image…");
+                    startTransition(async () => {
+                      const fd = new FormData();
+                      fd.set("projectImageFile", f);
+                      const res = await uploadProjectImage(cur.id, fd);
+                      if (!res.ok) {
+                        setStatus(res.message);
+                        return;
+                      }
+                      patchCurrent({ imageUrl: res.url });
+                      setStatus("Showcase image live on the landing page.");
+                    });
+                  }}
+                />
+                {cur.imageUrl && (
+                  <button
+                    type="button"
+                    className="btn slash"
+                    style={{ height: 26, padding: "0 10px", fontSize: 10, marginTop: 8 }}
+                    disabled={isPending}
+                    onClick={() => {
+                      setStatus("Removing image…");
+                      startTransition(async () => {
+                        const res = await clearProjectImage(cur.id);
+                        if (!res.ok) {
+                          setStatus(res.message);
+                          return;
+                        }
+                        patchCurrent({ imageUrl: null });
+                        setStatus("Image removed — tile shows the schematic again.");
+                      });
+                    }}
+                  >
+                    REMOVE IMAGE
+                  </button>
+                )}
               </div>
               <div
                 style={{

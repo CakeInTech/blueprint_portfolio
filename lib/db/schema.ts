@@ -186,6 +186,8 @@ export const projects = pgTable("projects", {
   year: text("year").notNull(),
   tag: text("tag"),
   color: text("color"),
+  /** Uploaded showcase image/mockup; null falls back to the schematic visual */
+  imageUrl: text("image_url"),
   blurb: text("blurb").notNull(),
   sortOrder: integer("sort_order").notNull(),
   version: integer("version").notNull().default(0),

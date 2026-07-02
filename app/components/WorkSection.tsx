@@ -249,17 +249,42 @@ const ProjectTile = memo(function ProjectTile({
           minHeight: p.size === "sm" ? 90 : 130,
           borderBottom: "1px dashed var(--rule)",
           overflow: "hidden",
-          background: p.color || "transparent",
+          background: p.imageUrl ? "var(--ink)" : p.color || "transparent",
         }}>
-          {!p.color && (
-            <div style={{
-              position: "absolute", inset: 0,
-              backgroundImage:
-                "repeating-linear-gradient(-45deg, var(--rule-soft) 0, var(--rule-soft) 1px, transparent 1px, transparent 9px)",
-              opacity: 0.55,
-            }} />
+          {p.imageUrl ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element -- CMS-managed showcase image */}
+              <img
+                src={p.imageUrl}
+                alt={`${p.name} showcase`}
+                loading="lazy"
+                className="project-tile-img"
+                style={{
+                  position: "absolute", inset: 0,
+                  width: "100%", height: "100%",
+                  objectFit: "cover", objectPosition: "center top",
+                  display: "block",
+                }}
+              />
+              {/* Ink gradient keeps the frame label + tag legible over any image */}
+              <div style={{
+                position: "absolute", inset: 0, pointerEvents: "none",
+                background: "linear-gradient(to bottom, rgba(10,13,17,0.28) 0%, transparent 32%, transparent 70%, rgba(10,13,17,0.34) 100%)",
+              }} />
+            </>
+          ) : (
+            <>
+              {!p.color && (
+                <div style={{
+                  position: "absolute", inset: 0,
+                  backgroundImage:
+                    "repeating-linear-gradient(-45deg, var(--rule-soft) 0, var(--rule-soft) 1px, transparent 1px, transparent 9px)",
+                  opacity: 0.55,
+                }} />
+              )}
+              <ProjectVisualLazy p={p} />
+            </>
           )}
-          <ProjectVisualLazy p={p} />
           {p.tag && (
             <div style={{
               position: "absolute", top: 10, right: 10,

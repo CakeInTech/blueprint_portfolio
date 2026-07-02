@@ -214,6 +214,7 @@ export async function getPortfolioContent(): Promise<PortfolioContent | null> {
         year: project.year,
         tag: project.tag ?? undefined,
         color: project.color ?? undefined,
+        imageUrl: project.imageUrl ?? null,
         blurb: project.blurb,
         stack: allProjectStack
           .filter((stackItem) => stackItem.projectId === project.id)
