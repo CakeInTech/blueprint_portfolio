@@ -274,13 +274,22 @@ function UpcomingPreview({
   );
 }
 
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 /* ===== Overview ===== */
 export function Overview({
   profile,
   stats,
+  onNavigate,
 }: {
   profile: Profile;
   stats: Stat[];
+  onNavigate?: (viewId: string) => void;
 }) {
   const firstName = profile.name.split(" ")[0] || "there";
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -306,13 +315,21 @@ export function Overview({
       <PageHead
         code="00"
         sub="WORKSPACE — DASHBOARD"
-        title={`Good morning, ${firstName}.`}
+        title={`${greeting()}, ${firstName}.`}
         action={
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn slash" style={{ height: 36 }}>
+            <button
+              className="btn slash"
+              style={{ height: 36 }}
+              onClick={() => onNavigate?.("blog")}
+            >
               + NEW POST
             </button>
-            <button className="btn primary" style={{ height: 36 }}>
+            <button
+              className="btn primary"
+              style={{ height: 36 }}
+              onClick={() => onNavigate?.("projects")}
+            >
               + NEW PROJECT
             </button>
           </div>
@@ -363,38 +380,27 @@ export function Overview({
       </Card>
 
       {/* Stat cards */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 16,
-          marginBottom: 24,
-        }}
-      >
+      <div className="cms-stat-grid" style={{ marginBottom: 24 }}>
         <StatCard
           label="UNREAD MESSAGES"
           v={loading ? "—" : String(unreadCount)}
           delta={loading ? "…" : `${unreadCount} NEW`}
-          spark={[3, 5, 4, 7, 6, 8, unreadCount]}
         />
         <StatCard
           label="UPCOMING CALLS"
           v={loading ? "—" : String(upcomingCount)}
-          delta="THIS WK"
-          spark={[1, 2, 2, 3, 4, 3, upcomingCount]}
+          delta="UPCOMING"
           accent
         />
         <StatCard
           label="VIEWS · 7D"
           v="—"
           delta="NO ANALYTICS"
-          spark={[]}
         />
         <StatCard
           label="SUBSCRIBERS"
           v={loading ? "—" : String(subscriberCount)}
           delta={loading ? "…" : "TOTAL"}
-          spark={[2, 3, 5, 4, 7, 6, subscriberCount]}
         />
       </div>
 
@@ -481,20 +487,31 @@ export function Overview({
             ["Work experience", "work"],
             ["Projects", "projects"],
             ["Devlog posts", "blog"],
-          ].map(([label]) => (
-            <div
+          ].map(([label, viewId]) => (
+            <button
               key={String(label)}
+              type="button"
+              onClick={() => onNavigate?.(String(viewId))}
               style={{
                 display: "flex",
                 gap: 10,
+                width: "100%",
+                textAlign: "left",
                 padding: "10px 0",
                 borderBottom: "1px dashed var(--rule-soft)",
                 fontSize: 12.5,
                 color: "var(--ink-2)",
+                background: "none",
+                borderTop: "none",
+                borderLeft: "none",
+                borderRight: "none",
+                borderRadius: 0,
+                cursor: "pointer",
+                font: "inherit",
               }}
             >
               → {label}
-            </div>
+            </button>
           ))}
         </Card>
       </div>

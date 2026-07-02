@@ -21,9 +21,8 @@ describe("CMS system settings", () => {
     expect(keys).toEqual([
       "google_calendar",
       "gmail_smtp",
-      "vercel",
+      "railway",
       "plausible",
-      "zapier",
     ]);
     expect(keys.length).toBe(new Set(keys).size);
   });

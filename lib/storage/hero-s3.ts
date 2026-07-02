@@ -5,26 +5,43 @@ export const HERO_S3_OBJECT_KEY = "hero/profile.webp";
 export type HeroS3Config = {
   client: S3Client;
   bucket: string;
-  /** e.g. `http://127.0.0.1:19000/portfolio-media` — no trailing slash */
+  /** Base URL the browser loads media from — no trailing slash. */
   publicBaseUrl: string;
 };
 
+function env(name: string): string | undefined {
+  const v = process.env[name]?.trim();
+  return v ? v : undefined;
+}
+
 /**
- * Returns null when MinIO/S3 env is incomplete (file uploads disabled).
+ * Object-storage config. Reads S3_* first, then falls back to the AWS_*
+ * variables Railway injects when a bucket is connected to the service.
+ *
+ * Railway buckets are private (no anonymous reads), so when
+ * S3_PUBLIC_BASE_URL is not set the public base defaults to this app's
+ * /api/media proxy, which streams objects using these credentials.
+ * Returns null when config is incomplete (uploads disabled).
  */
 export function getHeroS3Config(): HeroS3Config | null {
-  const endpoint = process.env.S3_ENDPOINT?.trim();
-  const accessKeyId = process.env.S3_ACCESS_KEY?.trim();
-  const secretAccessKey = process.env.S3_SECRET_KEY?.trim();
-  const bucket = process.env.S3_BUCKET?.trim();
-  const publicBaseUrl = process.env.S3_PUBLIC_BASE_URL?.trim().replace(/\/+$/, "");
+  const endpoint = env("S3_ENDPOINT") ?? env("AWS_ENDPOINT_URL");
+  const accessKeyId = env("S3_ACCESS_KEY") ?? env("AWS_ACCESS_KEY_ID");
+  const secretAccessKey = env("S3_SECRET_KEY") ?? env("AWS_SECRET_ACCESS_KEY");
+  const bucket = env("S3_BUCKET") ?? env("AWS_S3_BUCKET_NAME");
 
-  if (!endpoint || !accessKeyId || !secretAccessKey || !bucket || !publicBaseUrl) {
+  if (!endpoint || !accessKeyId || !secretAccessKey || !bucket) {
     return null;
   }
 
+  const site = env("NEXT_PUBLIC_SITE_URL")?.replace(/\/+$/, "");
+  const publicBaseUrl =
+    env("S3_PUBLIC_BASE_URL")?.replace(/\/+$/, "") ??
+    (site ? `${site}/api/media` : null);
+
+  if (!publicBaseUrl) return null;
+
   const client = new S3Client({
-    region: process.env.S3_REGION?.trim() || "us-east-1",
+    region: env("S3_REGION") ?? env("AWS_DEFAULT_REGION") ?? "us-east-1",
     endpoint,
     credentials: { accessKeyId, secretAccessKey },
     forcePathStyle: true,

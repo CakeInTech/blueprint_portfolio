@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import {
   BPFrame, Chip, Slash, Crosshairs, Monogram, SectionHead, DimLine,
 } from "./blueprint";
 import type { AboutContent, Profile, Stat } from "./data";
 
 /* ===== Hero ===== */
-export function Hero({ profile }: { profile: Profile }) {
+export function Hero({ profile, stats }: { profile: Profile; stats: Stat[] }) {
   // null until mount so server HTML matches first client paint (avoids clock hydration mismatch).
   const [now, setNow] = useState<Date | null>(null);
 
@@ -79,12 +79,31 @@ export function Hero({ profile }: { profile: Profile }) {
               >
                 See work ↓
               </a>
-              <a href="#" className="btn">Resume.pdf</a>
+              {profile.resumeUrl ? (
+                <a
+                  href={profile.resumeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn"
+                >
+                  Resume.pdf
+                </a>
+              ) : null}
             </div>
 
-            <div style={{ marginTop: 28, display: "flex", alignItems: "center", gap: 12, color: "var(--ink-3)" }}>
-              <DimLine length={220} label="3.5 yrs · 11 systems · 4 countries" />
-            </div>
+            {stats.length > 0 && (() => {
+              const label = stats
+                .slice(0, 3)
+                .map((s) => `${s.v} ${s.k.toLowerCase()}`)
+                .join(" · ");
+              // ~6.4px per mono glyph at 10px + end ticks
+              const length = Math.min(520, Math.max(220, label.length * 6.4 + 30));
+              return (
+                <div style={{ marginTop: 28, display: "flex", alignItems: "center", gap: 12, color: "var(--ink-3)", maxWidth: "100%", overflow: "hidden" }}>
+                  <DimLine length={length} label={label} />
+                </div>
+              );
+            })()}
           </div>
 
           {/* Right: spec card */}
@@ -101,9 +120,8 @@ function SpecCard({ profile }: { profile: Profile }) {
     ["HANDLE",      "@" + profile.handle],
     ["BASE",        profile.location.toUpperCase()],
     ["ZONE",        profile.timezone],
-    ["LANG",        "EN · AM · AR"],
-    ["STATUS",      "AVAILABLE Q2 2026"],
-    ["CONTRACT",    "FULL-TIME · CONTRACT · ADVISORY"],
+    ["STATUS",      profile.available ? "AVAILABLE FOR WORK" : "AT CAPACITY"],
+    ["CONTACT",     profile.email],
   ];
 
   return (
@@ -207,7 +225,10 @@ export function StatsStrip({ stats }: { stats: Stat[] }) {
       borderBottom: "1px solid var(--rule)",
     }}>
       <div className="wrap">
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${stats.length}, 1fr)` }}>
+        <div
+          className="stats-strip-grid"
+          style={{ "--stats-cols": stats.length } as CSSProperties}
+        >
           {stats.map((s, i) => (
             <div
               key={i}

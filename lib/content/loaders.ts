@@ -1,5 +1,4 @@
 import { asc, eq } from "drizzle-orm";
-import { CIT_DATA } from "@/app/components/data";
 import type {
   AboutContent,
   DevlogPost,
@@ -40,8 +39,49 @@ function asProjectSize(size: string): Project["size"] {
   return PROJECT_SIZES.has(size) ? (size as Project["size"]) : "sm";
 }
 
-export async function getPortfolioContent(): Promise<PortfolioContent> {
-  if (!db) return CIT_DATA;
+/** Blank scaffolding for the CMS editors when nothing is published yet. */
+export const EMPTY_ABOUT: AboutContent = {
+  headCode: "00.A",
+  headLabel: "ABOUT",
+  headTitle: "",
+  paragraph1: "",
+  paragraph2Prefix: "",
+  paragraph2Highlight: "",
+  paragraph2Mid: "",
+  paragraph2Emphasis: "",
+  paragraph2Suffix: "",
+  paragraph3: "",
+  frameLabel: "CURRENTLY",
+  frameSpec: "",
+  currently: [],
+};
+
+export const EMPTY_PROFILE: Profile = {
+  handle: "",
+  name: "",
+  role: "",
+  tagline: "",
+  location: "",
+  timezone: "",
+  email: "",
+  phone: "",
+  linkedin: "",
+  github: "",
+  heroImageUrl: null,
+  resumeUrl: null,
+  resumeUpdatedAt: null,
+  available: true,
+  yearsExp: 0,
+};
+
+/**
+ * Loads everything the public site renders, straight from the CMS tables.
+ * Returns null when the database is unreachable or nothing has been
+ * published — the page then shows an honest "not published yet" state
+ * instead of mock content.
+ */
+export async function getPortfolioContent(): Promise<PortfolioContent | null> {
+  if (!db) return null;
 
   try {
     const [profile] = await db
@@ -50,7 +90,7 @@ export async function getPortfolioContent(): Promise<PortfolioContent> {
       .where(eq(portfolioProfiles.id, "main"))
       .limit(1);
 
-    if (!profile) return CIT_DATA;
+    if (!profile) return null;
 
     const statsRows = await db
       .select()
@@ -131,7 +171,7 @@ export async function getPortfolioContent(): Promise<PortfolioContent> {
             description: row.description,
           })),
         }
-      : CIT_DATA.about;
+      : EMPTY_ABOUT;
 
     return {
       profile: {
@@ -146,6 +186,8 @@ export async function getPortfolioContent(): Promise<PortfolioContent> {
         linkedin: profile.linkedin ?? "",
         github: profile.github ?? "",
         heroImageUrl: profile.heroImageUrl ?? null,
+        resumeUrl: profile.resumeUrl ?? null,
+        resumeUpdatedAt: profile.resumeUpdatedAt?.toISOString() ?? null,
         available: profile.available,
         yearsExp: profile.yearsExp,
       },
@@ -195,7 +237,7 @@ export async function getPortfolioContent(): Promise<PortfolioContent> {
       })),
     };
   } catch (error) {
-    console.error("Falling back to static portfolio content", error);
-    return CIT_DATA;
+    console.error("getPortfolioContent failed — no content will render", error);
+    return null;
   }
 }

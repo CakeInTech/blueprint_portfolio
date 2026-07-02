@@ -1,9 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useActionState, useState, useMemo, useEffect } from "react";
+import { useActionState, useState, useMemo, useEffect, type CSSProperties } from "react";
 import { BPFrame, Chip, Slash, SectionHead, Live } from "./blueprint";
 import type { Profile, DevlogPost } from "./data";
+import type { WeeklyAvailability } from "@/lib/db/schema";
+import { DEFAULT_AVAILABILITY } from "@/lib/cms/cms-settings-model";
 import {
   requestBooking,
   submitContactInquiry,
@@ -12,9 +14,29 @@ import {
   type FormState,
 } from "@/lib/contact/actions";
 
+/** "linkedin.com/in/x" or full URL → https href; empty stays empty. */
+function toHref(value: string): string {
+  const t = value.trim();
+  if (!t) return "";
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`;
+}
+
+/** Display label without protocol. */
+function toLabel(value: string): string {
+  return value.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+}
+
 /* ===== Stack Grid ===== */
-export function StackGrid({ stack }: { stack: Record<string, string[]> }) {
+export function StackGrid({
+  stack,
+  profile,
+}: {
+  stack: Record<string, string[]>;
+  profile: Profile;
+}) {
   const groups = Object.entries(stack);
+  const partCount = groups.reduce((n, [, items]) => n + items.length, 0);
+  if (groups.length === 0) return null;
   return (
     <section
       id="stack"
@@ -25,19 +47,17 @@ export function StackGrid({ stack }: { stack: Record<string, string[]> }) {
           code="03"
           label="STACK — PARTS LIST"
           title="What I build with."
-          right={<Chip>BOM · 36 PARTS</Chip>}
+          right={<Chip>BOM · {partCount} PARTS</Chip>}
         />
         <div
-          className="stack-grid"
-          style={{
-            gridTemplateColumns: `repeat(${groups.length}, 1fr)`,
-          }}
+          className="stack-grid stack-grid-cols"
+          style={{ "--stack-cols": groups.length } as CSSProperties}
         >
           {groups.map(([cat, items], i) => (
             <div
               key={cat}
+              className="stack-grid-cell"
               style={{
-                borderRight: i < groups.length - 1 ? "1px dashed var(--rule)" : "none",
                 padding: "22px 20px",
                 position: "relative",
               }}
@@ -65,51 +85,40 @@ export function StackGrid({ stack }: { stack: Record<string, string[]> }) {
           ))}
         </div>
 
-        {/* Exploring + Availability */}
+        {/* Availability strip — driven by the CMS profile flag */}
         <div style={{
           marginTop: 24, padding: 24,
           border: "1px dashed var(--rule)",
-          display: "grid", gridTemplateColumns: "2fr 1fr",
-          gap: 32, position: "relative",
+          display: "flex", alignItems: "center",
+          justifyContent: "space-between", gap: 24, flexWrap: "wrap",
+          position: "relative",
         }}>
           <Slash style={{ position: "absolute", inset: 0, opacity: 0.35 }} />
           <div style={{ position: "relative" }}>
-            <div className="eyebrow">CURRENTLY EXPLORING</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-              {[
-                "CRDT sync", "Edge functions", "Rust + WASM",
-                "Local-first auth", "AI agents in SaaS", "OIDC + verifiable credentials",
-              ].map((t) => <Chip key={t}>{t}</Chip>)}
+            <div className="eyebrow">AVAILABILITY</div>
+            <div style={{ fontSize: 15, marginTop: 8 }}>
+              {profile.available
+                ? "Open for contract and advisory work."
+                : "Currently at capacity — inquiries still welcome."}
             </div>
           </div>
-          <div style={{ position: "relative", borderLeft: "1px dashed var(--rule)", paddingLeft: 24 }}>
-            <div className="eyebrow">AVAILABILITY · Q2 / Q3 2026</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 12 }}>
-              <AvailRow k="CONTRACT"  v="OPEN"              ok />
-              <AvailRow k="ADVISORY"  v="OPEN"              ok />
-              <AvailRow k="FULL-TIME" v="2 OFFERS PENDING"     />
-            </div>
-          </div>
+          <a
+            href="#contact"
+            className="btn accent"
+            style={{ position: "relative" }}
+            onClick={(e) => { e.preventDefault(); document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" }); }}
+          >
+            {profile.available ? "BOOK A CALL →" : "GET IN TOUCH →"}
+          </a>
         </div>
       </div>
     </section>
   );
 }
 
-function AvailRow({ k, v, ok }: { k: string; v: string; ok?: boolean }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12 }}>
-      <span style={{ color: "var(--ink-3)", letterSpacing: "0.12em" }}>{k}</span>
-      <span style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--ink)" }}>
-        {ok && <span style={{ width: 6, height: 6, background: "var(--accent)" }} />}
-        {v}
-      </span>
-    </div>
-  );
-}
-
 /* ===== Devlog ===== */
-export function Devlog({ posts }: { posts: DevlogPost[] }) {
+export function Devlog({ posts, profile }: { posts: DevlogPost[]; profile: Profile }) {
+  if (posts.length === 0) return null;
   return (
     <section
       id="devlog"
@@ -128,7 +137,7 @@ export function Devlog({ posts }: { posts: DevlogPost[] }) {
               <DevlogEntry key={i} p={p} idx={i} last={i === posts.length - 1} />
             ))}
           </div>
-          <SubscribePanel />
+          <SubscribePanel profile={profile} />
         </div>
       </div>
     </section>
@@ -184,11 +193,17 @@ function DevlogEntry({ p, idx, last }: { p: DevlogPost; idx: number; last: boole
   );
 }
 
-function SubscribePanel() {
+function SubscribePanel({ profile }: { profile: Profile }) {
   const [state, action, pending] = useActionState<FormState, FormData>(
     subscribeToDevlog,
     { ok: false, message: "" },
   );
+
+  const links: [string, string][] = [
+    profile.github ? [toLabel(profile.github), toHref(profile.github)] : null,
+    profile.linkedin ? [toLabel(profile.linkedin), toHref(profile.linkedin)] : null,
+    profile.email ? [profile.email, `mailto:${profile.email}`] : null,
+  ].filter((l): l is [string, string] => l !== null);
 
   return (
     <aside style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -197,7 +212,7 @@ function SubscribePanel() {
         <div style={{ position: "relative" }}>
           <div className="eyebrow" style={{ marginBottom: 8 }}>FIELD NOTES</div>
           <div style={{ fontSize: 18, lineHeight: 1.35, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 12 }}>
-            New post every ~3 weeks. Mostly devlog, sometimes opinion.
+            New posts straight from the build.
           </div>
           <p style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55, margin: "0 0 16px" }}>
             No newsletter, no tracking. Just plain text to your inbox.
@@ -224,41 +239,42 @@ function SubscribePanel() {
         </div>
       </BPFrame>
 
-      <BPFrame borderStyle="dashed" label="04.FEED" pad={18}>
-        <div className="eyebrow" style={{ marginBottom: 12 }}>SAY HELLO</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
-          {[
-            ["github.com/cakeintech", "https://github.com/cakeintech"],
-            ["linkedin.com/in/cakeintech", "https://linkedin.com/in/cakeintech"],
-            ["x.com/cakeintech", "https://x.com/cakeintech"],
-          ].map(([label, href]) => (
-            <a
-              key={label}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px dashed var(--rule-soft)" }}
-            >
-              <span>{label}</span>
-              <span style={{ color: "var(--ink-3)" }}>↗</span>
-            </a>
-          ))}
-        </div>
-      </BPFrame>
+      {links.length > 0 && (
+        <BPFrame borderStyle="dashed" label="04.FEED" pad={18}>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>SAY HELLO</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+            {links.map(([label, href]) => (
+              <a
+                key={label}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px dashed var(--rule-soft)" }}
+              >
+                <span style={{ overflowWrap: "anywhere" }}>{label}</span>
+                <span style={{ color: "var(--ink-3)" }}>↗</span>
+              </a>
+            ))}
+          </div>
+        </BPFrame>
+      )}
     </aside>
   );
 }
 
 /* ===== Contact / Booking CTA ===== */
-function buildBaseSlots() {
-  const out: { d: string; mon: string; dow: string; isoDate: string }[] = [];
+const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+
+function buildBaseSlots(availability: WeeklyAvailability) {
+  const out: { d: string; mon: string; dow: string; isoDate: string; dayKey: keyof WeeklyAvailability }[] = [];
   const d = new Date();
   let added = 0, i = 0;
-  while (added < 14) {
+  // Look ahead up to 45 days for the next 14 available days.
+  while (added < 14 && i < 45) {
     const cur = new Date(d);
     cur.setDate(d.getDate() + i);
-    const dow = cur.getDay();
-    if (dow !== 0 && dow !== 6) {
+    const dayKey = WEEKDAY_KEYS[cur.getDay()]!;
+    if (availability[dayKey]?.enabled) {
       const y = cur.getFullYear();
       const mo = String(cur.getMonth() + 1).padStart(2, "0");
       const day = String(cur.getDate()).padStart(2, "0");
@@ -267,6 +283,7 @@ function buildBaseSlots() {
         mon: cur.toLocaleString("en", { month: "short" }).toUpperCase(),
         dow: cur.toLocaleString("en", { weekday: "short" }).toUpperCase(),
         isoDate: `${y}-${mo}-${day}`,
+        dayKey,
       });
       added++;
     }
@@ -275,8 +292,29 @@ function buildBaseSlots() {
   return out;
 }
 
-export function ContactCTA({ profile }: { profile: Profile }) {
-  const baseSlots = useMemo(() => buildBaseSlots(), []);
+/** 90-minute grid inside the day's availability window (max 6 options). */
+function buildTimesForDay(day: WeeklyAvailability[keyof WeeklyAvailability]): string[] {
+  const [sh, sm] = day.start.split(":").map(Number);
+  const [eh, em] = day.end.split(":").map(Number);
+  const startMin = (sh ?? 9) * 60 + (sm ?? 0);
+  const endMin = (eh ?? 17) * 60 + (em ?? 0);
+  const times: string[] = [];
+  for (let t = startMin; t + 30 <= endMin && times.length < 6; t += 90) {
+    times.push(
+      `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`,
+    );
+  }
+  return times;
+}
+
+export function ContactCTA({
+  profile,
+  availability = DEFAULT_AVAILABILITY,
+}: {
+  profile: Profile;
+  availability?: WeeklyAvailability;
+}) {
+  const baseSlots = useMemo(() => buildBaseSlots(availability), [availability]);
   const [bookedDays, setBookedDays] = useState<string[]>([]);
   const slots = useMemo(
     () => baseSlots.map((s) => ({ ...s, busy: bookedDays.includes(s.isoDate) })),
@@ -297,7 +335,18 @@ export function ContactCTA({ profile }: { profile: Profile }) {
     { ok: false, message: "" },
   );
 
-  const times = ["09:00", "10:30", "13:00", "14:30", "16:00"];
+  const times = useMemo(
+    () =>
+      picked != null && slots[picked]
+        ? buildTimesForDay(availability[slots[picked].dayKey])
+        : [],
+    [picked, slots, availability],
+  );
+
+  const socialLinks: [string, string][] = [
+    profile.github ? ["GITHUB", toHref(profile.github)] : null,
+    profile.linkedin ? ["LINKEDIN", toHref(profile.linkedin)] : null,
+  ].filter((l): l is [string, string] => l !== null);
 
   return (
     <section
@@ -314,8 +363,8 @@ export function ContactCTA({ profile }: { profile: Profile }) {
 
         <div className="contact-grid">
           {/* Calendar picker */}
-          <BPFrame borderStyle="dashed" label="05.A — BOOK A CALL" spec="30 MIN · GMEET / ZOOM" pad={28}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+          <BPFrame borderStyle="dashed" label="05.A — BOOK A CALL" spec="30 MIN · GMEET" pad={28}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, gap: 12, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em" }}>30-min intro call</div>
                 <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>
@@ -326,20 +375,18 @@ export function ContactCTA({ profile }: { profile: Profile }) {
             </div>
 
             {/* Day picker */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 18 }}>
+            <div className="day-picker-grid">
               {slots.slice(0, 14).map((s, i) => (
                 <button
                   key={i}
-                  onClick={() => !s.busy && setPicked(i)}
+                  onClick={() => { if (!s.busy) { setPicked(i); setPickedTime(null); } }}
                   disabled={s.busy}
                   style={{
                     padding: "10px 4px",
-                    border: picked === i ? "1.5px solid var(--ink)" : "1px dashed var(--rule)",
+                    border: picked === i ? "1.5px solid var(--ink)" : "1px var(--border-style, dashed) var(--rule)",
                     backgroundColor: picked === i ? "var(--accent)" : "transparent",
                     backgroundImage: s.busy
-                      ? "repeating-linear-gradient(-45deg, var(--rule-soft) 0, var(--rule-soft) 1px, transparent 1px, transparent 6px)"
-                      : picked === i
-                      ? "none"
+                      ? "repeating-linear-gradient(-45deg, var(--rule-soft) 0, var(--rule-soft) 1px, transparent 1px, transparent var(--slash-density, 7px))"
                       : "none",
                     color: s.busy ? "var(--ink-4)" : picked === i ? "var(--accent-ink)" : "var(--ink)",
                     fontFamily: "var(--mono)", fontSize: 11,
@@ -353,7 +400,7 @@ export function ContactCTA({ profile }: { profile: Profile }) {
               ))}
             </div>
 
-            {picked != null && (
+            {picked != null && slots[picked] && (
               <form action={action}>
                 <input type="text" name="website" tabIndex={-1} autoComplete="off" style={{ display: "none" }} />
                 <input
@@ -369,12 +416,14 @@ export function ContactCTA({ profile }: { profile: Profile }) {
                   {times.map((t) => (
                     <button
                       key={t}
+                      type="button"
                       onClick={() => setPickedTime(t)}
                       style={{
                         padding: "9px 14px",
-                        border: pickedTime === t ? "1.5px solid var(--ink)" : "1px dashed var(--rule)",
+                        border: pickedTime === t ? "1.5px solid var(--ink)" : "1px var(--border-style, dashed) var(--rule)",
                         background: pickedTime === t ? "var(--accent)" : "transparent",
-                        color: "var(--ink)", fontFamily: "var(--mono)", fontSize: 12, cursor: "pointer",
+                        color: pickedTime === t ? "var(--accent-ink)" : "var(--ink)",
+                        fontFamily: "var(--mono)", fontSize: 12, cursor: "pointer",
                       }}
                     >
                       {t}
@@ -457,26 +506,22 @@ export function ContactCTA({ profile }: { profile: Profile }) {
                   </p>
                 )}
               </form>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                <a
-                  href="https://x.com/cakeintech"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn slash"
-                  style={{ justifyContent: "center" }}
-                >
-                  X / TWITTER
-                </a>
-                <a
-                  href="https://linkedin.com/in/cakeintech"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn slash"
-                  style={{ justifyContent: "center" }}
-                >
-                  LINKEDIN
-                </a>
-              </div>
+              {socialLinks.length > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${socialLinks.length}, 1fr)`, gap: 6 }}>
+                  {socialLinks.map(([label, href]) => (
+                    <a
+                      key={label}
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn slash"
+                      style={{ justifyContent: "center" }}
+                    >
+                      {label}
+                    </a>
+                  ))}
+                </div>
+              )}
             </BPFrame>
 
             <BPFrame borderStyle="hand" label="05.C" pad={24}>
@@ -495,6 +540,7 @@ export function ContactCTA({ profile }: { profile: Profile }) {
                       border: "1px solid var(--rule)",
                       display: "grid", placeItems: "center",
                       background: ok ? "var(--accent)" : "transparent",
+                      color: ok ? "var(--accent-ink)" : "var(--ink-3)",
                       fontSize: 10, fontWeight: 700,
                     }}>
                       {ok ? "✓" : "—"}
@@ -515,6 +561,14 @@ export function ContactCTA({ profile }: { profile: Profile }) {
 
 /* ===== Resume Band ===== */
 export function ResumeBand({ profile }: { profile: Profile }) {
+  if (!profile.resumeUrl) return null;
+
+  const updated = profile.resumeUpdatedAt
+    ? new Date(profile.resumeUpdatedAt)
+        .toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" })
+        .toUpperCase()
+    : null;
+
   return (
     <section
       id="resume"
@@ -550,11 +604,18 @@ export function ResumeBand({ profile }: { profile: Profile }) {
                 </span>
               </div>
               <div style={{ fontSize: 13, opacity: 0.7 }}>
-                Always-current for {profile.name}, exported from the CMS. 2 pages. Last updated 11 MAY 2026.
+                Always-current for {profile.name}, uploaded from the CMS.
+                {updated ? ` Last updated ${updated}.` : ""}
               </div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <a href="#" className="btn accent" style={{ borderColor: "var(--bg)" }}>
+              <a
+                href={profile.resumeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn accent"
+                style={{ borderColor: "var(--bg)" }}
+              >
                 ↓ DOWNLOAD .PDF
               </a>
             </div>
@@ -567,6 +628,30 @@ export function ResumeBand({ profile }: { profile: Profile }) {
 
 /* ===== Footer ===== */
 export function Footer({ profile, theme }: { profile: Profile; theme?: string }) {
+  const year = new Date().getFullYear();
+
+  const elsewhere: [string, string][] = [
+    profile.github ? ["GitHub", toHref(profile.github)] : null,
+    profile.linkedin ? ["LinkedIn", toHref(profile.linkedin)] : null,
+    profile.email ? ["Email", `mailto:${profile.email}`] : null,
+  ].filter((l): l is [string, string] => l !== null);
+
+  const system: [string, string][] = profile.resumeUrl
+    ? [["Resume.pdf", profile.resumeUrl]]
+    : [];
+
+  const columns: [string, [string, string][]][] = [
+    ["NAVIGATE", [
+      ["Index",    "#hero"],
+      ["Work",     "#work"],
+      ["Projects", "#projects"],
+      ["Devlog",   "#devlog"],
+      ["Contact",  "#contact"],
+    ]],
+    ["ELSEWHERE", elsewhere],
+    ["SYSTEM", system],
+  ];
+
   return (
     <footer style={{ position: "relative", padding: "48px 0 32px", background: "var(--bg)" }}>
       <div className="wrap">
@@ -585,53 +670,43 @@ export function Footer({ profile, theme }: { profile: Profile; theme?: string })
               }}
             />
             <div style={{ marginTop: 14, fontSize: 13, color: "var(--ink-2)", maxWidth: 280, lineHeight: 1.55 }}>
-              cakeintech — built and maintained from Addis Ababa. Every section editable via the CMS.
+              cakeintech — built and maintained from {profile.location || "the field"}. Every section editable via the CMS.
             </div>
             <div style={{ marginTop: 18, fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.12em" }}>
-              © 2026 · {profile.name.toUpperCase()}
+              © {year} · {profile.name.toUpperCase()}
             </div>
           </div>
 
-          {([
-            ["NAVIGATE", [
-              ["Index",    "#hero"],
-              ["Work",     "#work"],
-              ["Projects", "#projects"],
-              ["Devlog",   "#devlog"],
-              ["Contact",  "#contact"],
-            ]],
-            ["ELSEWHERE", [
-              ["GitHub",     "https://github.com/cakeintech"],
-              ["LinkedIn",   "https://linkedin.com/in/cakeintech"],
-              ["X / Twitter","https://x.com/cakeintech"],
-              ["Email",      `mailto:${profile.email}`],
-            ]],
-            ["SYSTEM", [
-              ["Resume.pdf", "#"],
-              ["Colophon",   "#"],
-              ["RSS feed",   "#"],
-            ]],
-          ] as [string, [string, string][]][]).map(([t, rows]) => (
-            <div key={t}>
-              <div className="eyebrow" style={{ marginBottom: 12 }}>{t}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {rows.map(([l, h]) => (
-                  <a key={l} href={h} style={{ fontSize: 13, color: "var(--ink-2)" }}>
-                    {l} <span style={{ color: "var(--ink-4)" }}>↗</span>
-                  </a>
-                ))}
+          {columns
+            .filter(([, rows]) => rows.length > 0)
+            .map(([t, rows]) => (
+              <div key={t}>
+                <div className="eyebrow" style={{ marginBottom: 12 }}>{t}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {rows.map(([l, h]) => (
+                    <a
+                      key={l}
+                      href={h}
+                      target={/^https?:\/\//.test(h) ? "_blank" : undefined}
+                      rel={/^https?:\/\//.test(h) ? "noopener noreferrer" : undefined}
+                      style={{ fontSize: 13, color: "var(--ink-2)" }}
+                    >
+                      {l} <span style={{ color: "var(--ink-4)" }}>↗</span>
+                    </a>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
 
         <div style={{
           marginTop: 36, paddingTop: 18,
           borderTop: "1px dashed var(--rule)",
           display: "flex", justifyContent: "space-between",
+          gap: 12, flexWrap: "wrap",
           fontSize: 10.5, color: "var(--ink-3)", letterSpacing: "0.14em",
         }}>
-          <span>© 2026 · cakeintech</span>
+          <span>© {year} · cakeintech</span>
           <span>{profile.email}</span>
         </div>
       </div>

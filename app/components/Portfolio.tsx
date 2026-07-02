@@ -6,10 +6,10 @@ import { Nav } from "./Nav";
 import { Hero, StatsStrip, About } from "./HeroSection";
 import { WorkTimeline, ProjectsMosaic } from "./WorkSection";
 import { StackGrid, Devlog, ContactCTA, ResumeBand, Footer } from "./TailSection";
-import { CIT_DATA } from "./data";
 import type { PortfolioContent } from "@/lib/content/loaders";
 import type { AppearanceDto } from "@/lib/cms/cms-settings-model";
-import { DEFAULT_APPEARANCE } from "@/lib/cms/cms-settings-model";
+import { DEFAULT_APPEARANCE, DEFAULT_AVAILABILITY } from "@/lib/cms/cms-settings-model";
+import type { WeeklyAvailability } from "@/lib/db/schema";
 import {
   accentInkForAccent,
   cssBorderStyleFromCms,
@@ -32,11 +32,13 @@ function resolveDataTheme(
 }
 
 export function Portfolio({
-  data = CIT_DATA,
+  data,
   appearance = DEFAULT_APPEARANCE,
+  availability = DEFAULT_AVAILABILITY,
 }: {
-  data?: PortfolioContent;
+  data: PortfolioContent;
   appearance?: AppearanceDto;
+  availability?: WeeklyAvailability;
 }) {
   const [prefersDark, setPrefersDark] = useState(false);
   const [localOverride, setLocalOverride] = useState<ResolvedTheme | null>(null);
@@ -90,10 +92,12 @@ export function Portfolio({
     }
   }, [localOverride]);
 
+  // The server (layout.tsx) already paints the saved tokens; this keeps them
+  // in sync when the visitor toggles the theme or appearance changes without
+  // a full reload. Values persist on unmount so CMS/login keep the theme.
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute("data-theme", resolvedTheme);
-    root.style.background = "var(--bg)";
 
     const accent = normalizeHex6Accent(appearance.accent);
     root.style.setProperty("--accent", accent);
@@ -104,16 +108,6 @@ export function Portfolio({
       "--border-style",
       cssBorderStyleFromCms(appearance.borderStyle),
     );
-
-    return () => {
-      root.removeAttribute("data-theme");
-      root.style.removeProperty("background");
-      root.style.removeProperty("--accent");
-      root.style.removeProperty("--accent-ink");
-      root.style.removeProperty("--grid-density");
-      root.style.removeProperty("--slash-density");
-      root.style.removeProperty("--border-style");
-    };
   }, [appearance, resolvedTheme]);
 
   const toggleTheme = useCallback(() => {
@@ -126,14 +120,14 @@ export function Portfolio({
   return (
     <BPStyleContext.Provider value={appearance.borderStyle}>
       <Nav theme={resolvedTheme} onToggleTheme={toggleTheme} />
-      <Hero profile={data.profile} />
+      <Hero profile={data.profile} stats={data.stats} />
       <StatsStrip stats={data.stats} />
       <About about={data.about} />
       <WorkTimeline items={data.experience} />
       <ProjectsMosaic projects={data.projects} />
-      <StackGrid stack={data.stack} />
-      <Devlog posts={data.devlog} />
-      <ContactCTA profile={data.profile} />
+      <StackGrid stack={data.stack} profile={data.profile} />
+      <Devlog posts={data.devlog} profile={data.profile} />
+      <ContactCTA profile={data.profile} availability={availability} />
       <ResumeBand profile={data.profile} />
       <Footer profile={data.profile} theme={resolvedTheme} />
     </BPStyleContext.Provider>

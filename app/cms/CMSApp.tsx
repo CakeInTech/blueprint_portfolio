@@ -9,6 +9,7 @@ import { MeetingsCalendar, Analytics } from "./views/workspace";
 import type {
   AppearanceDto,
   IntegrationRowDto,
+  SiteSettingsDto,
 } from "@/lib/cms/cms-settings-model";
 import {
   ProfileEditor,
@@ -37,27 +38,42 @@ type ViewId =
   | "settings";
 
 export type CMSAppProps = {
+  adminEmail: string;
   initialProfile: Profile;
   initialStats: Stat[];
   initialAbout: AboutContent;
   initialAppearance: AppearanceDto;
   initialIntegrations: IntegrationRowDto[];
+  initialSite: SiteSettingsDto;
 };
 
 export function CMSApp({
+  adminEmail,
   initialProfile,
   initialStats,
   initialAbout,
   initialAppearance,
   initialIntegrations,
+  initialSite,
 }: CMSAppProps) {
   const [current, setCurrent] = useState<ViewId>("overview");
 
   const views: Record<ViewId, React.ReactNode> = {
-    overview: <Overview profile={initialProfile} stats={initialStats} />,
+    overview: (
+      <Overview
+        profile={initialProfile}
+        stats={initialStats}
+        onNavigate={(id) => setCurrent(id as ViewId)}
+      />
+    ),
     inbox: <Inbox />,
-    calendar: <MeetingsCalendar />,
-    analytics: <Analytics />,
+    calendar: <MeetingsCalendar initialAvailability={initialSite.availability} />,
+    analytics: (
+      <Analytics
+        plausible={initialIntegrations.find((i) => i.key === "plausible")}
+        primaryDomain={initialSite.primaryDomain}
+      />
+    ),
     profile: (
       <ProfileEditor profile={initialProfile} stats={initialStats} />
     ),
@@ -68,13 +84,16 @@ export function CMSApp({
     blog: <BlogEditor />,
     media: <Media />,
     appearance: <Appearance initial={initialAppearance} />,
-    settings: <Settings integrations={initialIntegrations} />,
+    settings: (
+      <Settings integrations={initialIntegrations} site={initialSite} />
+    ),
   };
 
   return (
     <CMSShell
       current={current}
       setCurrent={(id) => setCurrent(id as ViewId)}
+      adminEmail={adminEmail}
     >
       {views[current]}
     </CMSShell>

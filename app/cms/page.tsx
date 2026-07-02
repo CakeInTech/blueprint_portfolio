@@ -1,26 +1,32 @@
 import { CMSApp } from "./CMSApp";
 import { requireAdmin } from "@/lib/auth/admin";
 import { getCmsSystemSettings } from "@/lib/cms/actions/settings";
-import { getPortfolioContent } from "@/lib/content/loaders";
+import {
+  EMPTY_ABOUT,
+  EMPTY_PROFILE,
+  getPortfolioContent,
+} from "@/lib/content/loaders";
 
 export const metadata = {
   title: "cakeintech / CMS — Admin",
 };
 
 export default async function CMSPage() {
-  await requireAdmin();
-  const [{ profile, stats, about }, system] = await Promise.all([
+  const { email } = await requireAdmin();
+  const [content, system] = await Promise.all([
     getPortfolioContent(),
     getCmsSystemSettings(),
   ]);
 
   return (
     <CMSApp
-      initialProfile={profile}
-      initialStats={stats}
-      initialAbout={about}
+      adminEmail={email}
+      initialProfile={content?.profile ?? EMPTY_PROFILE}
+      initialStats={content?.stats ?? []}
+      initialAbout={content?.about ?? EMPTY_ABOUT}
       initialAppearance={system.appearance}
       initialIntegrations={system.integrations}
+      initialSite={system.site}
     />
   );
 }

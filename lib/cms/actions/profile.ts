@@ -11,6 +11,7 @@ import {
   portfolioStats,
 } from "@/lib/db/schema";
 import { uploadHeroProfileFromFile } from "@/lib/cms/hero-upload";
+import { uploadResumeFromFile } from "@/lib/cms/resume-upload";
 
 export type ProfileFormState = {
   ok: boolean;
@@ -152,6 +153,24 @@ export async function saveProfileAndStats(
     heroImageUrl = heroParsed.value;
   }
 
+  // Resume: new file upload wins; otherwise honor explicit clear or keep stored value.
+  const resumeFile = formData.get("resumeFile");
+  const resumeCleared = formData.get("resumeClear") === "1";
+  const existingResumeUrl = String(formData.get("resumeUrl") ?? "").trim() || null;
+  let resumeUrl: string | null = resumeCleared ? null : existingResumeUrl;
+  let resumeUpdatedAt: Date | null | undefined;
+
+  if (resumeFile instanceof File && resumeFile.size > 0) {
+    const uploaded = await uploadResumeFromFile(resumeFile);
+    if (!uploaded.ok) {
+      return { ok: false, message: uploaded.message };
+    }
+    resumeUrl = uploaded.url;
+    resumeUpdatedAt = new Date();
+  } else if (resumeCleared) {
+    resumeUpdatedAt = null;
+  }
+
   const rawStats = collectStatsFromFormData(formData);
   for (const row of rawStats) {
     if (!row.v || !row.k) {
@@ -205,6 +224,8 @@ export async function saveProfileAndStats(
           linkedin: p.linkedin || null,
           github: p.github || null,
           heroImageUrl,
+          resumeUrl,
+          resumeUpdatedAt: resumeUpdatedAt ?? null,
           available,
           yearsExp: p.yearsExp,
         })
@@ -222,6 +243,8 @@ export async function saveProfileAndStats(
             linkedin: p.linkedin || null,
             github: p.github || null,
             heroImageUrl,
+            resumeUrl,
+            ...(resumeUpdatedAt !== undefined ? { resumeUpdatedAt } : {}),
             available,
             yearsExp: p.yearsExp,
             version: sql`${portfolioProfiles.version} + 1`,

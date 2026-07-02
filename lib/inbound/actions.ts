@@ -5,10 +5,12 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/client";
 import {
+  auditEvents,
   bookingRequests,
   contactInquiries,
   newsletterSubscribers,
 } from "@/lib/db/schema";
+import { sendVisitorEmail } from "@/lib/email/resend";
 import {
   fetchInboundThreads,
   filterInboundThreads,
@@ -130,6 +132,101 @@ export async function updateInboundStatusAction(
     .where(eq(newsletterSubscribers.id, uuid))
     .returning({ id: newsletterSubscribers.id });
   if (!row) return { ok: false, error: "not_found" };
+  return { ok: true };
+}
+
+export type ReplyInboundResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+const replyPayloadSchema = z.object({
+  id: z.string().min(10).max(80),
+  body: z.string().trim().min(2).max(5000),
+});
+
+/**
+ * Sends a reply email to the visitor behind a contact or booking thread.
+ * Delivery goes through the configured provider (Resend) from EMAIL_FROM,
+ * with replies routed back to CONTACT_TO_EMAIL.
+ */
+export async function replyToInboundAction(
+  raw: unknown,
+): Promise<ReplyInboundResult> {
+  const { email: adminEmail } = await requireAdmin();
+
+  let db;
+  try {
+    db = getDb();
+  } catch {
+    return { ok: false, error: "Database is not configured." };
+  }
+
+  const parsed = replyPayloadSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: "Write a reply between 2 and 5000 characters." };
+  }
+
+  const split = splitInboundId(parsed.data.id);
+  if (!split || split.kind === "subscriber") {
+    return { ok: false, error: "Replies are only supported for contact and booking threads." };
+  }
+
+  const { kind, uuid } = split;
+
+  let toEmail: string | null = null;
+  let subject = "";
+
+  if (kind === "contact") {
+    const [row] = await db
+      .select({ email: contactInquiries.email })
+      .from(contactInquiries)
+      .where(eq(contactInquiries.id, uuid))
+      .limit(1);
+    if (!row) return { ok: false, error: "Thread not found." };
+    toEmail = row.email;
+    subject = "Re: your inquiry — cakeintech";
+  } else {
+    const [row] = await db
+      .select({
+        email: bookingRequests.email,
+        requestedDay: bookingRequests.requestedDay,
+        requestedTime: bookingRequests.requestedTime,
+      })
+      .from(bookingRequests)
+      .where(eq(bookingRequests.id, uuid))
+      .limit(1);
+    if (!row) return { ok: false, error: "Thread not found." };
+    toEmail = row.email;
+    subject = `Re: your call request (${row.requestedDay} ${row.requestedTime}) — cakeintech`;
+  }
+
+  const result = await sendVisitorEmail(toEmail, {
+    subject,
+    text: parsed.data.body,
+  });
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: result.error ?? "Email provider is not configured.",
+    };
+  }
+
+  if (kind === "contact") {
+    await db
+      .update(contactInquiries)
+      .set({ status: "read" })
+      .where(eq(contactInquiries.id, uuid));
+  }
+
+  await db.insert(auditEvents).values({
+    actorEmail: adminEmail,
+    action: "inbound.reply",
+    entityType: kind,
+    entityId: uuid,
+    metadata: { to: toEmail, chars: parsed.data.body.length },
+  });
+
   return { ok: true };
 }
 

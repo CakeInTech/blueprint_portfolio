@@ -102,6 +102,9 @@ export const portfolioProfiles = pgTable("portfolio_profiles", {
   github: text("github"),
   /** Public HTTPS URL or data URL from CMS upload; null = CIT monogram placeholder */
   heroImageUrl: text("hero_image_url"),
+  /** Public URL of the uploaded resume PDF; null hides resume CTAs on the site */
+  resumeUrl: text("resume_url"),
+  resumeUpdatedAt: timestamp("resume_updated_at", { mode: "date" }),
   available: boolean("available").notNull().default(true),
   yearsExp: integer("years_exp").notNull().default(0),
   version: integer("version").notNull().default(0),
@@ -326,6 +329,29 @@ export const meetings = pgTable("meetings", {
   gcalEventId: text("gcal_event_id"),
   gcalMeetLink: text("gcal_meet_link"),
   bookingRequestId: uuid("booking_request_id"),
+  version: integer("version").notNull().default(0),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export type AvailabilityDay = {
+  enabled: boolean;
+  /** HH:MM 24h */
+  start: string;
+  /** HH:MM 24h */
+  end: string;
+};
+
+export type WeeklyAvailability = Record<
+  "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun",
+  AvailabilityDay
+>;
+
+export const siteSettings = pgTable("site_settings", {
+  id: text("id").primaryKey().default("main"),
+  primaryDomain: text("primary_domain").notNull().default("cakeintech.com"),
+  aliases: text("aliases").notNull().default(""),
+  availability: jsonb("availability").$type<WeeklyAvailability | null>(),
   version: integer("version").notNull().default(0),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),

@@ -9,7 +9,6 @@ import React, {
   useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
-import { CIT_DATA } from "@/app/components/data";
 import type { Profile, Stat } from "@/app/components/data";
 import {
   saveProfileAndStats,
@@ -154,6 +153,123 @@ function HeroSpecThumbPreview({ src }: { src: string }) {
   );
 }
 
+/* ===== FileDropzone — blueprint-styled drag & drop upload ===== */
+function FileDropzone({
+  name,
+  accept,
+  acceptTypes,
+  hint,
+  file,
+  onFile,
+  children,
+}: {
+  /** Form field name for the hidden file input (submitted with the form). */
+  name: string;
+  /** `accept` attribute, e.g. "image/png,image/jpeg" or "application/pdf". */
+  accept: string;
+  /** MIME types considered valid on drop. */
+  acceptTypes: string[];
+  hint: string;
+  file: File | null;
+  onFile: (file: File | null) => void;
+  children?: React.ReactNode;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
+
+  function assignFile(f: File | null) {
+    // Keep the hidden input's FileList in sync so the plain <form> submit
+    // carries the dropped file without any extra JS on save.
+    if (inputRef.current) {
+      if (f) {
+        const dt = new DataTransfer();
+        dt.items.add(f);
+        inputRef.current.files = dt.files;
+      } else {
+        inputRef.current.value = "";
+      }
+    }
+    onFile(f);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    setDropError(null);
+    const f = e.dataTransfer.files?.[0];
+    if (!f) return;
+    if (!acceptTypes.includes(f.type)) {
+      setDropError(`Unsupported file type (${f.type || "unknown"}).`);
+      return;
+    }
+    assignFile(f);
+  }
+
+  return (
+    <div>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        style={{
+          border: dragOver
+            ? "1.5px solid var(--ink)"
+            : "1.5px dashed var(--rule)",
+          background: dragOver ? "var(--paper-tint)" : "transparent",
+          padding: 18,
+          cursor: "pointer",
+          transition: "background .12s ease, border-color .12s ease",
+          position: "relative",
+          outline: "none",
+        }}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          name={name}
+          accept={accept}
+          style={{ display: "none" }}
+          onChange={(e) => {
+            setDropError(null);
+            onFile(e.target.files?.[0] ?? null);
+          }}
+        />
+        {children ?? (
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 22, marginBottom: 6, color: "var(--ink-3)" }}>
+              ⇪
+            </div>
+            <div style={{ fontSize: 12.5, marginBottom: 4 }}>
+              {dragOver ? "Drop to attach" : "Drag & drop, or click to browse"}
+            </div>
+            <div style={{ fontSize: 10.5, color: "var(--ink-3)" }}>{hint}</div>
+          </div>
+        )}
+      </div>
+      {dropError && (
+        <p style={{ fontSize: 11, color: "var(--danger)", margin: "8px 0 0" }}>
+          {dropError}
+        </p>
+      )}
+    </div>
+  );
+}
+
+const HERO_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
 /* ===== ProfileEditor ===== */
 export function ProfileEditor({
   profile,
@@ -167,15 +283,29 @@ export function ProfileEditor({
   const [statRows, setStatRows] = useState<Stat[]>(() =>
     padStatRows(stats, 6),
   );
-  /** Object URL for a picked hero file — square preview before save. */
+
+  /** Picked-but-unsaved hero file + its object URL preview. */
+  const [heroFile, setHeroFile] = useState<File | null>(null);
   const [heroLocalPreview, setHeroLocalPreview] = useState<string | null>(null);
-  const heroFileInputRef = useRef<HTMLInputElement>(null);
   const heroPickUrlRef = useRef<string | null>(null);
+
+  /** Picked-but-unsaved resume file. */
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeCleared, setResumeCleared] = useState(false);
 
   const [state, formAction, pending] = useActionState<
     ProfileFormState,
     FormData
   >(saveProfileAndStats, profileFormInitial);
+
+  const clearHeroPick = () => {
+    if (heroPickUrlRef.current) {
+      URL.revokeObjectURL(heroPickUrlRef.current);
+      heroPickUrlRef.current = null;
+    }
+    setHeroLocalPreview(null);
+    setHeroFile(null);
+  };
 
   useEffect(() => {
     setForm({ ...profile });
@@ -185,7 +315,9 @@ export function ProfileEditor({
       heroPickUrlRef.current = null;
     }
     setHeroLocalPreview(null);
-    if (heroFileInputRef.current) heroFileInputRef.current.value = "";
+    setHeroFile(null);
+    setResumeFile(null);
+    setResumeCleared(false);
   }, [profile, stats]);
 
   useEffect(() => {
@@ -214,12 +346,30 @@ export function ProfileEditor({
     });
   };
 
+  const onHeroFile = (f: File | null) => {
+    if (heroPickUrlRef.current) {
+      URL.revokeObjectURL(heroPickUrlRef.current);
+      heroPickUrlRef.current = null;
+    }
+    if (!f) {
+      setHeroLocalPreview(null);
+      setHeroFile(null);
+      return;
+    }
+    const url = URL.createObjectURL(f);
+    heroPickUrlRef.current = url;
+    setHeroLocalPreview(url);
+    setHeroFile(f);
+  };
+
   const heroSavedUrl = form.heroImageUrl ?? "";
   const heroRemotePreview =
     heroSavedUrl.startsWith("data:image/") || /^https?:\/\//i.test(heroSavedUrl)
       ? heroSavedUrl
       : null;
   const heroPreviewThumb = heroLocalPreview ?? heroRemotePreview;
+
+  const resumeSavedUrl = resumeCleared ? null : profile.resumeUrl;
 
   return (
     <div>
@@ -228,7 +378,7 @@ export function ProfileEditor({
         sub="CONTENT — PROFILE / HERO"
         title="Profile & hero"
         action={
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             {state.message ? (
               <span
                 style={{
@@ -267,13 +417,7 @@ export function ProfileEditor({
       />
 
       <form id="profile-editor-form" action={formAction}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 380px",
-            gap: 24,
-          }}
-        >
+        <div className="cms-main-aside">
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <Card label="10.A — IDENTITY" spec="REQUIRED">
             <div
@@ -334,168 +478,211 @@ export function ProfileEditor({
                 />
               </Field>
             </div>
+          </Card>
 
-            <div style={{ marginTop: 14 }}>
-              <Field
-                label="Hero spec photo (optional)"
-                hint="Spec card — 88×88 CSS slot; uploads are saved as 176×176 WebP with the blueprint dashed frame, then sent to MinIO (S3_* in .env). Empty keeps the CIT monogram. JPEG / PNG / WebP / GIF, up to ~12 MB before processing."
-              >
-                <input
-                  type="hidden"
-                  name="heroImageUrl"
-                  value={form.heroImageUrl ?? ""}
-                />
-                {(() => {
-                  const hu = form.heroImageUrl ?? "";
-                  const isData = hu.startsWith("data:image/");
-                  const isHttp = /^https?:\/\//i.test(hu);
-                  if (isData) {
-                    return (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 12,
-                          alignItems: "center",
-                        }}
-                      >
-                        <HeroSpecThumbPreview src={hu} />
-                        <button
-                          type="button"
-                          className="btn slash"
-                          onClick={() => onF("heroImageUrl", "")}
-                        >
-                          Remove image
-                        </button>
-                      </div>
-                    );
-                  }
-                  return (
-                    <>
-                      {isHttp ? (
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: 12,
-                            alignItems: "center",
-                            marginBottom: 10,
-                          }}
-                        >
-                          <HeroSpecThumbPreview src={hu} />
-                          <button
-                            type="button"
-                            className="btn slash"
-                            onClick={() => onF("heroImageUrl", "")}
-                          >
-                            Clear URL
-                          </button>
-                        </div>
-                      ) : null}
-                      <input
-                        className="fld"
-                        placeholder="https://… (optional if you upload below)"
-                        value={hu}
-                        onChange={(e) => onF("heroImageUrl", e.target.value)}
-                      />
-                    </>
-                  );
-                })()}
-                <div style={{ marginTop: 10 }}>
+          <Card label="10.B — HERO PHOTO" spec="88×88 SPEC SLOT">
+            <input
+              type="hidden"
+              name="heroImageUrl"
+              value={form.heroImageUrl ?? ""}
+            />
+            <div
+              style={{
+                display: "flex",
+                gap: 16,
+                alignItems: "stretch",
+                flexWrap: "wrap",
+              }}
+            >
+              {/* Current / picked preview */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+                {heroPreviewThumb ? (
+                  <HeroSpecThumbPreview src={heroPreviewThumb} />
+                ) : (
                   <div
+                    title="Monogram when no photo"
                     style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 10,
-                      alignItems: "center",
-                    }}
-                  >
-                    <input
-                      ref={heroFileInputRef}
-                      type="file"
-                      name="heroImageFile"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      style={{ fontSize: 12, maxWidth: "100%", flex: "1 1 200px" }}
-                      onChange={(e) => {
-                        if (heroPickUrlRef.current) {
-                          URL.revokeObjectURL(heroPickUrlRef.current);
-                          heroPickUrlRef.current = null;
-                        }
-                        const f = e.target.files?.[0];
-                        if (!f) {
-                          setHeroLocalPreview(null);
-                          return;
-                        }
-                        const url = URL.createObjectURL(f);
-                        heroPickUrlRef.current = url;
-                        setHeroLocalPreview(url);
-                      }}
-                    />
-                    {heroLocalPreview ? (
-                      <button
-                        type="button"
-                        className="btn slash"
-                        onClick={() => {
-                          if (heroFileInputRef.current)
-                            heroFileInputRef.current.value = "";
-                          if (heroPickUrlRef.current) {
-                            URL.revokeObjectURL(heroPickUrlRef.current);
-                            heroPickUrlRef.current = null;
-                          }
-                          setHeroLocalPreview(null);
-                        }}
-                      >
-                        Clear file
-                      </button>
-                    ) : null}
-                  </div>
-                  {heroLocalPreview ? (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: 12,
-                        alignItems: "flex-start",
-                        marginTop: 12,
-                      }}
-                    >
-                      <HeroSpecThumbPreview src={heroLocalPreview} />
-                      <p
-                        style={{
-                          flex: "1 1 200px",
-                          fontSize: 11,
-                          color: "var(--ink-3)",
-                          margin: 0,
-                          lineHeight: 1.45,
-                          maxWidth: 360,
-                        }}
-                      >
-                        Square preview uses the same center crop as the live site
-                        slot. There is no in-browser cropper — Save runs Sharp on
-                        the server (cover + dashed frame + WebP) then uploads to
-                        storage.
-                      </p>
-                    </div>
-                  ) : null}
-                  <div
-                    style={{
-                      fontSize: 11,
+                      width: 88,
+                      height: 88,
+                      flexShrink: 0,
+                      border: "1px dashed var(--rule)",
+                      boxSizing: "border-box",
+                      display: "grid",
+                      placeItems: "center",
+                      fontSize: 13,
+                      fontFamily: "var(--mono)",
                       color: "var(--ink-3)",
-                      marginTop: 6,
-                      lineHeight: 1.45,
+                      letterSpacing: "0.12em",
                     }}
                   >
-                    Choose a file and click Save & publish — the
-                    server crops, adds the dashed frame, uploads to storage, and
-                    stores the public URL. If you pick a file, it overrides the URL
-                    field for that save.
+                    CIT
                   </div>
-                </div>
-              </Field>
+                )}
+                {heroLocalPreview ? (
+                  <button
+                    type="button"
+                    className="btn slash"
+                    style={{ height: 26, padding: "0 10px", fontSize: 10 }}
+                    onClick={clearHeroPick}
+                  >
+                    CLEAR PICK
+                  </button>
+                ) : heroRemotePreview ? (
+                  <button
+                    type="button"
+                    className="btn slash"
+                    style={{ height: 26, padding: "0 10px", fontSize: 10 }}
+                    onClick={() => onF("heroImageUrl", "")}
+                  >
+                    REMOVE
+                  </button>
+                ) : null}
+              </div>
+
+              {/* Dropzone */}
+              <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+                <FileDropzone
+                  name="heroImageFile"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  acceptTypes={HERO_IMAGE_TYPES}
+                  hint="JPEG · PNG · WebP · GIF — up to 12 MB"
+                  file={heroFile}
+                  onFile={onHeroFile}
+                >
+                  {heroFile ? (
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 12.5, marginBottom: 4 }}>
+                        {heroFile.name}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
+                        {(heroFile.size / 1024).toFixed(0)} KB — replaces the
+                        current photo on save. Click or drop to change.
+                      </div>
+                    </div>
+                  ) : undefined}
+                </FileDropzone>
+                <p
+                  style={{
+                    fontSize: 10.5,
+                    color: "var(--ink-3)",
+                    margin: "8px 0 0",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Saved as 176×176 WebP with the blueprint frame, uploaded to
+                  object storage on Save &amp; publish. A picked file overrides
+                  the URL below.
+                </p>
+                <input
+                  className="fld"
+                  placeholder="…or paste an https:// image URL"
+                  value={
+                    heroSavedUrl.startsWith("data:image/") ? "" : heroSavedUrl
+                  }
+                  onChange={(e) => onF("heroImageUrl", e.target.value)}
+                  style={{ marginTop: 10, padding: "8px 12px", fontSize: 12 }}
+                />
+              </div>
             </div>
           </Card>
 
-          <Card label="10.B — CONTACT" spec="PUBLIC">
+          <Card label="10.C — RESUME" spec="PUBLIC CTA · PDF">
+            <input type="hidden" name="resumeUrl" value={profile.resumeUrl ?? ""} />
+            <input type="hidden" name="resumeClear" value={resumeCleared ? "1" : ""} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {resumeSavedUrl && !resumeFile ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    flexWrap: "wrap",
+                    border: "1px dashed var(--rule)",
+                    padding: "10px 14px",
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>▤</span>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div style={{ fontSize: 12.5 }}>cakeintech.pdf</div>
+                    <div style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
+                      {profile.resumeUpdatedAt
+                        ? `Updated ${new Date(profile.resumeUpdatedAt).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" })}`
+                        : "Live on the site"}
+                    </div>
+                  </div>
+                  <a
+                    href={resumeSavedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn slash"
+                    style={{ height: 26, padding: "0 10px", fontSize: 10 }}
+                  >
+                    VIEW ↗
+                  </a>
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{
+                      height: 26,
+                      padding: "0 10px",
+                      fontSize: 10,
+                      borderColor: "var(--danger)",
+                      color: "var(--danger)",
+                    }}
+                    onClick={() => setResumeCleared(true)}
+                  >
+                    REMOVE
+                  </button>
+                </div>
+              ) : null}
+              {resumeCleared && !resumeFile ? (
+                <p style={{ fontSize: 11, color: "var(--ink-3)", margin: 0 }}>
+                  Resume will be removed on save — CTAs disappear from the
+                  site.{" "}
+                  <button
+                    type="button"
+                    onClick={() => setResumeCleared(false)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--ink)",
+                      textDecoration: "underline",
+                      cursor: "pointer",
+                      font: "inherit",
+                      padding: 0,
+                    }}
+                  >
+                    Undo
+                  </button>
+                </p>
+              ) : null}
+              <FileDropzone
+                name="resumeFile"
+                accept="application/pdf"
+                acceptTypes={["application/pdf"]}
+                hint="PDF — up to 10 MB · powers the “Resume.pdf” buttons and download band"
+                file={resumeFile}
+                onFile={(f) => {
+                  setResumeFile(f);
+                  if (f) setResumeCleared(false);
+                }}
+              >
+                {resumeFile ? (
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 12.5, marginBottom: 4 }}>
+                      ▤ {resumeFile.name}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: "var(--ink-3)" }}>
+                      {(resumeFile.size / 1024).toFixed(0)} KB — uploads on
+                      Save &amp; publish. Click or drop to change.
+                    </div>
+                  </div>
+                ) : undefined}
+              </FileDropzone>
+            </div>
+          </Card>
+
+          <Card label="10.D — CONTACT" spec="PUBLIC">
             <div
               style={{
                 display: "grid",
@@ -554,7 +741,7 @@ export function ProfileEditor({
             </div>
           </Card>
 
-          <Card label="10.C — LIVE STATS" spec="HOMEPAGE STRIP">
+          <Card label="10.E — LIVE STATS" spec="HOMEPAGE STRIP">
             <p
               style={{
                 fontSize: 12,
@@ -571,6 +758,7 @@ export function ProfileEditor({
               {statRows.map((row, i) => (
                 <div
                   key={i}
+                  className="keep-grid"
                   style={{
                     display: "grid",
                     gridTemplateColumns: "120px 1fr",
@@ -599,71 +787,34 @@ export function ProfileEditor({
             </div>
           </Card>
 
-          <Card label="10.D — AVAILABILITY">
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
-                gap: 14,
-              }}
-            >
-              {(
-                [
-                  ["Contract", true],
-                  ["Advisory", true],
-                  ["Full-time", false],
-                ] as [string, boolean][]
-              ).map(([k, on]) => (
-                <Field key={k} label={k}>
-                  <button
-                    className="btn"
-                    style={{
-                      width: "100%",
-                      padding: 8,
-                      justifyContent: "center",
-                      background: on ? "var(--accent)" : "transparent",
-                    }}
-                  >
-                    {on ? "OPEN" : "PAUSED"}
-                  </button>
-                </Field>
-              ))}
-            </div>
-            <div style={{ marginTop: 14 }}>
-              <Field label="Open to inquiries (site-wide)">
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    fontSize: 13,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    name="available"
-                    checked={form.available}
-                    onChange={(e) => onF("available", e.target.checked)}
-                  />
-                  Available for work
-                </label>
-              </Field>
-            </div>
-            <div style={{ marginTop: 14 }}>
-              <Field label="Banner copy (homepage)">
+          <Card label="10.F — AVAILABILITY">
+            <Field label="Open to inquiries (site-wide)">
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  fontSize: 13,
+                }}
+              >
                 <input
-                  className="fld"
-                  defaultValue="Available for Q2/Q3 2026 · 2 offers pending"
+                  type="checkbox"
+                  name="available"
+                  checked={form.available}
+                  onChange={(e) => onF("available", e.target.checked)}
                 />
-              </Field>
-            </div>
+                Available for work
+              </label>
+            </Field>
+            <p style={{ fontSize: 11, color: "var(--ink-3)", margin: "10px 0 0", lineHeight: 1.5 }}>
+              Drives the spec-card STATUS row and the availability strip on the
+              homepage. Booking hours live under Workspace → Meetings.
+            </p>
           </Card>
         </div>
 
         {/* Live preview */}
-        <div
-          style={{ position: "sticky", top: 80, alignSelf: "flex-start" }}
-        >
+        <div className="cms-aside-sticky">
           <Card label="LIVE PREVIEW" spec="HERO / DESKTOP" pad={0}>
             <div
               style={{ padding: 22, background: "var(--paper-tint)" }}
@@ -702,8 +853,8 @@ export function ProfileEditor({
                   <div
                     style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}
                   >
-                    <Chip>@{form.handle}</Chip>
-                    <Chip>{form.location}</Chip>
+                    <Chip>@{form.handle || "handle"}</Chip>
+                    <Chip>{form.location || "Location"}</Chip>
                   </div>
               <div
                 style={{
@@ -714,9 +865,9 @@ export function ProfileEditor({
                   marginBottom: 10,
                 }}
               >
-                {form.name.split(" ")[0]}
+                {(form.name || "Your Name").split(" ")[0]}
                 <br />
-                {form.name.split(" ").slice(1).join(" ")}
+                {(form.name || "Your Name").split(" ").slice(1).join(" ")}
                 <span style={{ color: "var(--ink-3)" }}>.</span>
               </div>
               <div
@@ -726,7 +877,7 @@ export function ProfileEditor({
                   marginBottom: 14,
                 }}
               >
-                {form.role}{" "}
+                {form.role || "Role"}{" "}
                 <span style={{ color: "var(--ink-3)" }}>—</span>{" "}
                 <span className="mark">{form.yearsExp}+ yrs</span>
               </div>
@@ -751,9 +902,14 @@ export function ProfileEditor({
                 gap: 8,
                 fontSize: 11,
                 color: "var(--ink-3)",
+                flexWrap: "wrap",
+                alignItems: "center",
               }}
             >
-              <Dot color="var(--accent)" /> Saved · 0:14 ago
+              <Dot color="var(--accent)" />
+              {heroFile || resumeFile
+                ? "Unsaved uploads — Save & publish to apply"
+                : "Preview updates as you type"}
             </div>
           </Card>
         </div>
@@ -2705,48 +2861,29 @@ export function Media() {
         code="15"
         sub="CONTENT — MEDIA"
         title="Media library"
-        action={
-          <button className="btn primary" style={{ height: 36 }}>
-            ↑ UPLOAD
-          </button>
-        }
       />
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(6, 1fr)",
-          gap: 10,
-        }}
-      >
-        {Array.from({ length: 18 }).map((_, i) => (
-          <div
-            key={i}
-            style={{
-              aspectRatio: "1 / 1",
-              border: "1px dashed var(--rule)",
-              position: "relative",
-              padding: 6,
-              fontSize: 9,
-              color: "var(--ink-3)",
-            }}
-          >
-            <Slash style={{ position: "absolute", inset: 0, opacity: 0.5 }} />
-            <div
-              style={{
-                position: "absolute",
-                bottom: 6,
-                left: 8,
-                right: 8,
-                display: "flex",
-                justifyContent: "space-between",
-              }}
-            >
-              <span className="num">IMG_{String(2840 + i)}</span>
-              <span>{(120 + i * 14) % 320}KB</span>
-            </div>
-          </div>
-        ))}
-      </div>
+      <Card label="15.A — MANAGED UPLOADS">
+        <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--ink-2)" }}>
+          <p style={{ margin: "0 0 10px" }}>
+            Two assets are managed from the CMS and stored in object storage
+            (MinIO / S3):
+          </p>
+          <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>
+            <li style={{ marginBottom: 6 }}>
+              <b>Hero photo</b> — Content → Profile / Hero → Hero photo
+              (drag &amp; drop, auto-cropped to the spec slot).
+            </li>
+            <li>
+              <b>Resume PDF</b> — Content → Profile / Hero → Resume (powers
+              the public download CTAs).
+            </li>
+          </ul>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--ink-3)" }}>
+            A general-purpose library (project screenshots, devlog images) is
+            not wired yet — this page will list those files once it is.
+          </p>
+        </div>
+      </Card>
     </div>
   );
 }

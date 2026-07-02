@@ -1,3 +1,8 @@
+/**
+ * Seed-only starter content — used exclusively by `scripts/seed.ts` to
+ * bootstrap the database. The live site and CMS never read from this object;
+ * all rendered content comes from the CMS tables.
+ */
 export const CIT_DATA = {
   profile: {
     handle: "cakeintech",
@@ -14,6 +19,8 @@ export const CIT_DATA = {
     available: true,
     yearsExp: 3,
     heroImageUrl: null,
+    resumeUrl: null,
+    resumeUpdatedAt: null,
   },
   stats: [
     { v: "3+", k: "Years shipping" },
@@ -335,6 +342,10 @@ export type Profile = {
   github: string;
   /** When null/empty, hero spec card shows the CIT monogram placeholder */
   heroImageUrl: string | null;
+  /** Public URL of the uploaded resume PDF; null hides resume CTAs */
+  resumeUrl: string | null;
+  /** ISO timestamp of the last resume upload; null when no resume */
+  resumeUpdatedAt: string | null;
   available: boolean;
   yearsExp: number;
 };

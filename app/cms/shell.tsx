@@ -1,7 +1,7 @@
 "use client";
 
 import React, { ReactNode, CSSProperties } from "react";
-import { Chip, Monogram, Slash } from "@/app/components/blueprint";
+import { Monogram, Slash } from "@/app/components/blueprint";
 import Link from "next/link";
 import { cmsSignOut } from "@/app/cms/auth-actions";
 
@@ -166,12 +166,13 @@ export function PageHead({
 }) {
   return (
     <div
+      className="cms-page-head"
       style={{
         marginBottom: 24,
         display: "flex",
         justifyContent: "space-between",
         alignItems: "flex-end",
-        gap: 24,
+        gap: 16,
         paddingBottom: 16,
         borderBottom: "1px dashed var(--rule)",
       }}
@@ -201,8 +202,6 @@ export function PageHead({
     </div>
   );
 }
-
-const CMS_SIDEBAR_PX = 240;
 
 /* ===== NAV config ===== */
 export const NAV = [
@@ -240,26 +239,14 @@ export const NAV = [
 export function Sidebar({
   current,
   setCurrent,
+  adminEmail,
 }: {
   current: string;
   setCurrent: (id: string) => void;
+  adminEmail?: string;
 }) {
   return (
-    <aside
-      style={{
-        borderRight: "1px dashed var(--rule)",
-        background: "var(--bg-2)",
-        display: "flex",
-        flexDirection: "column",
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: CMS_SIDEBAR_PX,
-        height: "100vh",
-        zIndex: 40,
-        overflow: "hidden auto",
-      }}
-    >
+    <aside className="cms-sidebar">
       {/* Brand */}
       <div
         style={{
@@ -411,11 +398,9 @@ export function Sidebar({
               whiteSpace: "nowrap",
             }}
           >
-            cake.intech@gmail.com
+            {adminEmail || "Admin"}
           </div>
-          <div style={{ color: "var(--ink-3)", fontSize: 10 }}>
-            Owner · Last sync 0:14
-          </div>
+          <div style={{ color: "var(--ink-3)", fontSize: 10 }}>Owner</div>
         </div>
         <Link
           href="/"
@@ -430,7 +415,13 @@ export function Sidebar({
 }
 
 /* ===== Topbar ===== */
-export function Topbar({ current }: { current: string }) {
+export function Topbar({
+  current,
+  onMenu,
+}: {
+  current: string;
+  onMenu?: () => void;
+}) {
   const label = NAV.flatMap((g) => g.items).find((i) => i.id === current);
   return (
     <div
@@ -438,7 +429,8 @@ export function Topbar({ current }: { current: string }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "14px 32px",
+        gap: 10,
+        padding: "14px 16px",
         borderBottom: "1px dashed var(--rule)",
         background: "var(--bg)",
         height: 60,
@@ -454,13 +446,31 @@ export function Topbar({ current }: { current: string }) {
           gap: 12,
           fontSize: 12,
           color: "var(--ink-3)",
+          minWidth: 0,
         }}
       >
+        <button
+          type="button"
+          className="cms-menu-btn"
+          aria-label="Toggle navigation"
+          onClick={onMenu}
+        >
+          ☰
+        </button>
         <span style={{ letterSpacing: "0.14em" }}>CMS</span>
         <span>/</span>
-        <span style={{ color: "var(--ink-2)" }}>{label?.label || "—"}</span>
         <span
-          className="num"
+          style={{
+            color: "var(--ink-2)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {label?.label || "—"}
+        </span>
+        <span
+          className="num cms-topbar-chips"
           style={{
             fontSize: 10,
             color: "var(--ink-4)",
@@ -470,11 +480,7 @@ export function Topbar({ current }: { current: string }) {
           · {label?.code}
         </span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <Chip>⌘K SEARCH</Chip>
-        <Chip>
-          <Dot /> AUTOSAVED 14:32
-        </Chip>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
         <Link
           href="/"
           className="btn"
@@ -491,12 +497,6 @@ export function Topbar({ current }: { current: string }) {
             LOG OUT
           </button>
         </form>
-        <button
-          className="btn primary"
-          style={{ height: 32, padding: "0 14px", fontSize: 11 }}
-        >
-          PUBLISH
-        </button>
       </div>
     </div>
   );
@@ -507,27 +507,34 @@ export function CMSShell({
   children,
   current,
   setCurrent,
+  adminEmail,
 }: {
   children: ReactNode;
   current: string;
   setCurrent: (id: string) => void;
+  adminEmail?: string;
 }) {
+  const [menuOpen, setMenuOpen] = React.useState(false);
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "var(--bg)",
-        paddingLeft: CMS_SIDEBAR_PX,
-      }}
-    >
-      <Sidebar current={current} setCurrent={setCurrent} />
-      <main
-        style={{ position: "relative", overflow: "hidden", minWidth: 0 }}
-      >
-        <Topbar current={current} />
-        <div style={{ padding: "28px 32px 64px", minWidth: 0 }}>
-          {children}
-        </div>
+    <div className={`cms-shell${menuOpen ? " sidebar-open" : ""}`}>
+      <button
+        type="button"
+        className="cms-sidebar-overlay"
+        aria-label="Close navigation"
+        onClick={() => setMenuOpen(false)}
+      />
+      <Sidebar
+        current={current}
+        setCurrent={(id) => {
+          setCurrent(id);
+          setMenuOpen(false);
+        }}
+        adminEmail={adminEmail}
+      />
+      <main style={{ position: "relative", overflow: "hidden", minWidth: 0 }}>
+        <Topbar current={current} onMenu={() => setMenuOpen((v) => !v)} />
+        <div className="cms-content">{children}</div>
       </main>
     </div>
   );

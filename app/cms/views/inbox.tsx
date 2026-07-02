@@ -11,6 +11,7 @@ import { Chip } from "@/app/components/blueprint";
 import {
   listInboundThreadsAction,
   markAllInboundReadAction,
+  replyToInboundAction,
   updateInboundStatusAction,
 } from "@/lib/inbound/actions";
 import type { InboundFilterKind, InboundThread } from "@/lib/inbound/types";
@@ -55,6 +56,8 @@ export function Inbox() {
   const [search, setSearch] = useState("");
   const [selId, setSelId] = useState<string | null>(null);
   const [confirmStatus, setConfirmStatus] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replyStatus, setReplyStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const refresh = useCallback(() => {
@@ -95,6 +98,29 @@ export function Inbox() {
       setSelId(threads[0]!.id);
     }
   }, [threads, selId]);
+
+  // Reset the composer when switching threads.
+  useEffect(() => {
+    setReplyText("");
+    setReplyStatus(null);
+  }, [selId]);
+
+  function handleSendReply(thread: InboundThread) {
+    setReplyStatus("Sending…");
+    startTransition(async () => {
+      const res = await replyToInboundAction({
+        id: thread.id,
+        body: replyText,
+      });
+      if (!res.ok) {
+        setReplyStatus(`Error: ${res.error}`);
+        return;
+      }
+      setReplyStatus(`Reply sent to ${thread.email}.`);
+      setReplyText("");
+      await refresh();
+    });
+  }
 
   const unreadCount = useMemo(
     () => threads.filter((t) => t.unread).length,
@@ -197,15 +223,6 @@ export function Inbox() {
             >
               MARK ALL READ
             </button>
-            <button
-              type="button"
-              className="btn primary"
-              style={{ height: 36, opacity: 0.45 }}
-              disabled
-              title="Use your email client to compose."
-            >
-              + COMPOSE
-            </button>
           </div>
         }
       />
@@ -236,14 +253,7 @@ export function Inbox() {
         ))}
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "380px 1fr",
-          gap: 16,
-          minHeight: 580,
-        }}
-      >
+      <div className="cms-inbox-grid">
         <Card label="01.A — THREADS" pad={0}>
           <div
             style={{
@@ -520,72 +530,58 @@ export function Inbox() {
                   <p style={{ margin: 0 }}>Newsletter signup — no message body.</p>
                 )}
               </div>
-              <div
-                style={{
-                  padding: 14,
-                  borderTop: "1px dashed var(--rule)",
-                  background: "var(--paper-tint)",
-                }}
-              >
-                <textarea
-                  className="fld"
-                  rows={3}
-                  placeholder="Draft a reply in your mail client…"
-                  readOnly
-                  title="Outbound mail is not wired from the CMS."
-                  defaultValue=""
-                  style={{
-                    resize: "vertical",
-                    marginBottom: 10,
-                    fontFamily: "var(--mono)",
-                    opacity: 0.65,
-                  }}
-                />
+              {cur.kind !== "subscriber" && (
                 <div
                   style={{
-                    display: "flex",
-                    gap: 8,
-                    justifyContent: "space-between",
+                    padding: 14,
+                    borderTop: "1px dashed var(--rule)",
+                    background: "var(--paper-tint)",
                   }}
                 >
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <textarea
+                    className="fld"
+                    rows={3}
+                    placeholder={`Reply to ${cur.email}…`}
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    style={{
+                      resize: "vertical",
+                      marginBottom: 10,
+                      fontFamily: "var(--mono)",
+                    }}
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: replyStatus?.startsWith("Error")
+                          ? "var(--danger)"
+                          : "var(--ink-3)",
+                        fontFamily: "var(--mono)",
+                      }}
+                    >
+                      {replyStatus ?? "Sends from the configured address; replies land in your inbox."}
+                    </span>
                     <button
                       type="button"
-                      className="btn slash"
-                      style={{
-                        height: 28,
-                        padding: "0 10px",
-                        fontSize: 11,
-                        opacity: 0.45,
-                      }}
-                      disabled
+                      className="btn primary"
+                      style={{ height: 28, padding: "0 14px", fontSize: 11 }}
+                      disabled={pending || replyText.trim().length < 2}
+                      onClick={() => handleSendReply(cur)}
                     >
-                      + SCHEDULE CALL
-                    </button>
-                    <button
-                      type="button"
-                      className="btn slash"
-                      style={{
-                        height: 28,
-                        padding: "0 10px",
-                        fontSize: 11,
-                        opacity: 0.45,
-                      }}
-                      disabled
-                    >
-                      INSERT TEMPLATE
+                      SEND →
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    className="btn primary"
-                    style={{ height: 28, padding: "0 14px", fontSize: 11 }}
-                    disabled
-                  >
-                    SEND →
-                  </button>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </Card>

@@ -209,7 +209,7 @@ export function BPFrame({
           style={{
             position: "absolute", inset: 0, opacity: 0.5,
             backgroundImage:
-              "repeating-linear-gradient(-45deg, var(--rule-soft) 0, var(--rule-soft) 1px, transparent 1px, transparent 7px)",
+              "repeating-linear-gradient(-45deg, var(--rule-soft) 0, var(--rule-soft) 1px, transparent 1px, transparent var(--slash-density, 7px))",
             pointerEvents: "none",
           }}
         />
@@ -248,7 +248,7 @@ export function BPFrame({
 /* ===== Slash fill ===== */
 export function Slash({
   angle = -45,
-  gap = 7,
+  gap,
   color,
   style,
 }: {
@@ -257,10 +257,11 @@ export function Slash({
   color?: string;
   style?: CSSProperties;
 }) {
+  const gapValue = gap != null ? `${gap}px` : "var(--slash-density, 7px)";
   return (
     <div
       style={{
-        backgroundImage: `repeating-linear-gradient(${angle}deg, ${color || "var(--rule-soft)"} 0, ${color || "var(--rule-soft)"} 1px, transparent 1px, transparent ${gap}px)`,
+        backgroundImage: `repeating-linear-gradient(${angle}deg, ${color || "var(--rule-soft)"} 0, ${color || "var(--rule-soft)"} 1px, transparent 1px, transparent ${gapValue})`,
         ...style,
       }}
     />
@@ -318,7 +319,7 @@ export function Chip({
       style={{
         display: "inline-flex", alignItems: "center", height: 22,
         padding: "0 8px", fontSize: 11, letterSpacing: "0.04em",
-        border: "1px dashed var(--rule)",
+        border: "1px var(--border-style, dashed) var(--rule)",
         background: accent ? "var(--accent)" : "transparent",
         color: accent ? "var(--accent-ink)" : "var(--ink-2)",
         ...style,
