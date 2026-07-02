@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { AboutContent } from "@/app/components/data";
+import { MarkdownBody } from "@/app/components/MarkdownBody";
 import { Card, Field, PageHead } from "../shell";
 import {
   createAboutCurrentlyItem,
@@ -20,6 +21,7 @@ function sectionFromAboutContent(a: AboutContent): AboutSectionRecord {
     headCode: a.headCode,
     headLabel: a.headLabel,
     headTitle: a.headTitle,
+    contentMd: a.contentMd ?? "",
     paragraph1: a.paragraph1,
     paragraph2Prefix: a.paragraph2Prefix,
     paragraph2Highlight: a.paragraph2Highlight,
@@ -30,6 +32,21 @@ function sectionFromAboutContent(a: AboutContent): AboutSectionRecord {
     frameLabel: a.frameLabel,
     frameSpec: a.frameSpec,
   };
+}
+
+/** One-time migration into the markdown editor: rebuild the old split
+ *  paragraphs as markdown so nothing is lost when switching over. */
+function legacyToMarkdown(s: AboutSectionRecord): string {
+  const p2 = [
+    s.paragraph2Prefix,
+    s.paragraph2Highlight ? `**${s.paragraph2Highlight}**` : "",
+    s.paragraph2Mid,
+    s.paragraph2Emphasis ? `*${s.paragraph2Emphasis}*` : "",
+    s.paragraph2Suffix,
+  ]
+    .join("")
+    .trim();
+  return [s.paragraph1, p2, s.paragraph3].filter(Boolean).join("\n\n");
 }
 
 export function AboutEditor({ initialAbout }: { initialAbout: AboutContent }) {
@@ -44,7 +61,11 @@ export function AboutEditor({ initialAbout }: { initialAbout: AboutContent }) {
   const load = async () => {
     try {
       const data = await getAboutEditorData();
-      setSection(data.section);
+      const sec = { ...data.section };
+      if (!sec.contentMd.trim()) {
+        sec.contentMd = legacyToMarkdown(sec);
+      }
+      setSection(sec);
       setItems(data.items);
       setStatus("Loaded.");
       return data;
@@ -75,10 +96,10 @@ export function AboutEditor({ initialAbout }: { initialAbout: AboutContent }) {
     startTransition(async () => {
       try {
         await updateAbout(section);
-        setStatus("About copy saved.");
+        setStatus("About section published.");
         router.refresh();
       } catch {
-        setStatus("Save failed. Check required fields.");
+        setStatus("Save failed. Title and body are required.");
       }
     });
   };
@@ -132,7 +153,7 @@ export function AboutEditor({ initialAbout }: { initialAbout: AboutContent }) {
             disabled={isPending}
             onClick={saveSection}
           >
-            SAVE SECTION
+            {isPending ? "SAVING…" : "SAVE & PUBLISH"}
           </button>
         }
       />
@@ -140,115 +161,59 @@ export function AboutEditor({ initialAbout }: { initialAbout: AboutContent }) {
         {status}
       </p>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 16,
-          marginBottom: 16,
-        }}
-      >
-        <Card label="10A.01" spec="SECTION HEAD">
-          <Field label="Code">
-            <input
-              className="fld"
-              value={section.headCode}
-              onChange={(e) => patchSection({ headCode: e.target.value })}
-            />
-          </Field>
-          <Field label="Label">
-            <input
-              className="fld"
-              value={section.headLabel}
-              onChange={(e) => patchSection({ headLabel: e.target.value })}
-            />
-          </Field>
-          <Field label="Title">
-            <input
-              className="fld"
-              value={section.headTitle}
-              onChange={(e) => patchSection({ headTitle: e.target.value })}
-            />
-          </Field>
-        </Card>
-        <Card label="10A.02" spec="FRAME (RIGHT COLUMN)">
-          <Field label="Frame label">
-            <input
-              className="fld"
-              value={section.frameLabel}
-              onChange={(e) => patchSection({ frameLabel: e.target.value })}
-            />
-          </Field>
-          <Field label="Frame spec">
-            <input
-              className="fld"
-              value={section.frameSpec}
-              onChange={(e) => patchSection({ frameSpec: e.target.value })}
-            />
-          </Field>
-        </Card>
-      </div>
-
-      <Card label="10A.03" spec="BODY" style={{ marginBottom: 16 }}>
-        <Field label="Paragraph 1">
-          <textarea
-            className="fld"
-            rows={4}
-            value={section.paragraph1}
-            onChange={(e) => patchSection({ paragraph1: e.target.value })}
-            style={{ minHeight: 88, resize: "vertical" }}
-          />
-        </Field>
-        <p style={{ fontSize: 11, color: "var(--ink-3)", margin: "0 0 8px" }}>
-          Paragraph 2 is split so the highlight (mark) and stack line (emphasis) stay styled without raw HTML.
-        </p>
-        <Field label="P2 — before highlight">
+      <Card label="10A.01" spec="SECTION" style={{ marginBottom: 16 }}>
+        <Field label="Section title" hint="the big heading above the story">
           <input
             className="fld"
-            value={section.paragraph2Prefix}
-            onChange={(e) => patchSection({ paragraph2Prefix: e.target.value })}
-          />
-        </Field>
-        <Field label="P2 — highlight (mark)">
-          <input
-            className="fld"
-            value={section.paragraph2Highlight}
-            onChange={(e) => patchSection({ paragraph2Highlight: e.target.value })}
-          />
-        </Field>
-        <Field label="P2 — after highlight, before emphasis">
-          <textarea
-            className="fld"
-            rows={2}
-            value={section.paragraph2Mid}
-            onChange={(e) => patchSection({ paragraph2Mid: e.target.value })}
-            style={{ minHeight: 52, resize: "vertical" }}
-          />
-        </Field>
-        <Field label="P2 — emphasis (stack line)">
-          <input
-            className="fld"
-            value={section.paragraph2Emphasis}
-            onChange={(e) => patchSection({ paragraph2Emphasis: e.target.value })}
-          />
-        </Field>
-        <Field label="P2 — after emphasis">
-          <input
-            className="fld"
-            value={section.paragraph2Suffix}
-            onChange={(e) => patchSection({ paragraph2Suffix: e.target.value })}
-          />
-        </Field>
-        <Field label="Paragraph 3">
-          <textarea
-            className="fld"
-            rows={3}
-            value={section.paragraph3}
-            onChange={(e) => patchSection({ paragraph3: e.target.value })}
-            style={{ minHeight: 72, resize: "vertical" }}
+            value={section.headTitle}
+            onChange={(e) => patchSection({ headTitle: e.target.value })}
           />
         </Field>
       </Card>
+
+      <div className="cms-grid-2" style={{ marginBottom: 16 }}>
+        <Card label="10A.02 — STORY" spec="MARKDOWN">
+          <textarea
+            className="fld"
+            rows={16}
+            value={section.contentMd}
+            placeholder={
+              "Write your story in markdown…\n\n**bold** renders as the accent highlight, *italics* as emphasis. Blank line = new paragraph. Lists, links, and tables work too."
+            }
+            onChange={(e) => patchSection({ contentMd: e.target.value })}
+            style={{
+              minHeight: 320,
+              resize: "vertical",
+              fontFamily: "var(--mono)",
+              lineHeight: 1.6,
+            }}
+          />
+          <p style={{ fontSize: 10.5, color: "var(--ink-3)", margin: "10px 0 0", lineHeight: 1.5 }}>
+            One field, full markdown: <b>**highlight**</b>, <i>*emphasis*</i>,
+            [links](https://…), lists, `code`, tables. Paragraphs are separated
+            by a blank line.
+          </p>
+        </Card>
+
+        <Card label="10A.03 — PREVIEW" spec="AS RENDERED LIVE">
+          <div
+            style={{
+              fontSize: 15,
+              lineHeight: 1.65,
+              color: "var(--ink-2)",
+              minHeight: 320,
+            }}
+          >
+            {section.contentMd.trim() ? (
+              <MarkdownBody>{section.contentMd}</MarkdownBody>
+            ) : (
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                Start typing to see the live preview.
+              </span>
+            )}
+          </div>
+        </Card>
+      </div>
 
       <div
         style={{
@@ -263,7 +228,7 @@ export function AboutEditor({ initialAbout }: { initialAbout: AboutContent }) {
       >
         <div>
           <div style={{ fontSize: 10, letterSpacing: "0.16em", color: "var(--ink-3)" }}>
-            CURRENTLY — LIST
+            CURRENTLY — LIST (RIGHT FRAME)
           </div>
           <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>
             {items.length} rows

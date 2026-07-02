@@ -4,6 +4,7 @@ import { useState, useEffect, type CSSProperties } from "react";
 import {
   BPFrame, Chip, Slash, Crosshairs, Monogram, SectionHead, DimLine,
 } from "./blueprint";
+import { MarkdownBody } from "./MarkdownBody";
 import type { AboutContent, Profile, Stat } from "./data";
 
 /* ===== Hero ===== */
@@ -265,21 +266,27 @@ export function About({ about }: { about: AboutContent }) {
         />
         <div className="about-grid">
           <div style={{ fontSize: 18, lineHeight: 1.65, color: "var(--ink-2)", letterSpacing: "0.005em" }}>
-            <p style={{ margin: "0 0 18px" }}>{about.paragraph1}</p>
-            <p style={{ margin: "0 0 18px" }}>
-              {about.paragraph2Prefix}
-              {about.paragraph2Highlight ? (
-                <span className="mark">{about.paragraph2Highlight}</span>
-              ) : null}
-              {about.paragraph2Mid}
-              {about.paragraph2Emphasis ? (
-                <em style={{ fontStyle: "normal", color: "var(--ink)" }}>
-                  {about.paragraph2Emphasis}
-                </em>
-              ) : null}
-              {about.paragraph2Suffix}
-            </p>
-            <p style={{ margin: 0 }}>{about.paragraph3}</p>
+            {about.contentMd?.trim() ? (
+              <MarkdownBody>{about.contentMd}</MarkdownBody>
+            ) : (
+              <>
+                <p style={{ margin: "0 0 18px" }}>{about.paragraph1}</p>
+                <p style={{ margin: "0 0 18px" }}>
+                  {about.paragraph2Prefix}
+                  {about.paragraph2Highlight ? (
+                    <span className="mark">{about.paragraph2Highlight}</span>
+                  ) : null}
+                  {about.paragraph2Mid}
+                  {about.paragraph2Emphasis ? (
+                    <em style={{ fontStyle: "normal", color: "var(--ink)" }}>
+                      {about.paragraph2Emphasis}
+                    </em>
+                  ) : null}
+                  {about.paragraph2Suffix}
+                </p>
+                <p style={{ margin: 0 }}>{about.paragraph3}</p>
+              </>
+            )}
           </div>
 
           <BPFrame borderStyle="dashed" label={about.frameLabel} spec={about.frameSpec} pad={24}>

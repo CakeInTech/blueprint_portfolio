@@ -126,6 +126,8 @@ export const portfolioAbout = pgTable("portfolio_about", {
   headCode: text("head_code").notNull(),
   headLabel: text("head_label").notNull(),
   headTitle: text("head_title").notNull(),
+  /** Single markdown body; when set it replaces the legacy paragraph fields */
+  contentMd: text("content_md"),
   paragraph1: text("paragraph_1").notNull(),
   paragraph2Prefix: text("paragraph_2_prefix").notNull(),
   paragraph2Highlight: text("paragraph_2_highlight").notNull(),

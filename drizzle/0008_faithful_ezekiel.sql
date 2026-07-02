@@ -1,0 +1,1 @@
+ALTER TABLE "portfolio_about" ADD COLUMN "content_md" text;

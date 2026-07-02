@@ -32,6 +32,10 @@ export const CIT_DATA = {
     headCode: "00.A",
     headLabel: "ABOUT — STORY",
     headTitle: "Born offline. Built for it.",
+    contentMd:
+      "I grew up where the internet flickered. Where the booking-system reboot mid-checkout loses a guest, where the bus that comes home doesn't always come home. The software I write is shaped by that.\n\n" +
+      "Three years in, I ship **offline-first SaaS** across hotels, schools and clinics — desktop, mobile and web, syncing when the wind blows the right direction. Stacks: *Next.js, TypeScript, Flutter, Supabase, Postgres*. Methods: small teams, real users, real signal.\n\n" +
+      "I read schematics for fun. This site is one. Every section is a sheet, every component an annotated part.",
     paragraph1:
       "I grew up where the internet flickered. Where the booking-system reboot mid-checkout loses a guest, where the bus that comes home doesn't always come home. The software I write is shaped by that.",
     paragraph2Prefix: "Three years in, I ship ",
@@ -364,6 +368,8 @@ export type AboutContent = {
   headCode: string;
   headLabel: string;
   headTitle: string;
+  /** Single markdown body — when non-empty it replaces the legacy paragraph fields */
+  contentMd: string | null;
   paragraph1: string;
   paragraph2Prefix: string;
   paragraph2Highlight: string;

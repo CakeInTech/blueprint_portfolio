@@ -12,6 +12,7 @@ export type AboutSectionRecord = {
   headCode: string;
   headLabel: string;
   headTitle: string;
+  contentMd: string;
   paragraph1: string;
   paragraph2Prefix: string;
   paragraph2Highlight: string;
@@ -36,6 +37,7 @@ const aboutSectionSchema = z.object({
   headCode: z.string().trim().min(1).max(32),
   headLabel: z.string().trim().min(1).max(120),
   headTitle: z.string().trim().min(1).max(200),
+  contentMd: z.string().trim().max(20000).default(""),
   paragraph1: z.string().trim().min(1).max(4000),
   paragraph2Prefix: z.string().trim().max(2000).default(""),
   paragraph2Highlight: z.string().trim().max(200).default(""),
@@ -86,6 +88,7 @@ async function ensureMainAboutRow() {
     headCode: a.headCode,
     headLabel: a.headLabel,
     headTitle: a.headTitle,
+    contentMd: a.contentMd,
     paragraph1: a.paragraph1,
     paragraph2Prefix: a.paragraph2Prefix,
     paragraph2Highlight: a.paragraph2Highlight,
@@ -117,6 +120,7 @@ function rowToSectionRecord(row: typeof portfolioAbout.$inferSelect): AboutSecti
     headCode: row.headCode,
     headLabel: row.headLabel,
     headTitle: row.headTitle,
+    contentMd: row.contentMd ?? "",
     paragraph1: row.paragraph1,
     paragraph2Prefix: row.paragraph2Prefix,
     paragraph2Highlight: row.paragraph2Highlight,
@@ -179,6 +183,7 @@ export async function updateAbout(
       headCode: parsed.headCode,
       headLabel: parsed.headLabel,
       headTitle: parsed.headTitle,
+      contentMd: parsed.contentMd || null,
       paragraph1: parsed.paragraph1,
       paragraph2Prefix: parsed.paragraph2Prefix,
       paragraph2Highlight: parsed.paragraph2Highlight,
