@@ -3,6 +3,11 @@ import { Portfolio } from "./components/Portfolio";
 import { getCmsSystemSettings } from "@/lib/cms/actions/settings";
 import { getPortfolioContent } from "@/lib/content/loaders";
 
+// The Railway builder has no DATABASE_URL, so a static prerender would bake
+// the "nothing published" state (and default appearance) into the page.
+// Render per-request; CMS saves also revalidate this path.
+export const dynamic = "force-dynamic";
+
 function UnpublishedNotice() {
   return (
     <main
