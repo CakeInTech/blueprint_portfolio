@@ -135,7 +135,7 @@ export function Portfolio({
       <Devlog posts={data.devlog} />
       <ContactCTA profile={data.profile} />
       <ResumeBand profile={data.profile} />
-      <Footer profile={data.profile} />
+      <Footer profile={data.profile} theme={resolvedTheme} />
     </BPStyleContext.Provider>
   );
 }

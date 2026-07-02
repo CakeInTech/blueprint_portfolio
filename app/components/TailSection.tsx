@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { useActionState, useState, useMemo, useEffect } from "react";
-import { BPFrame, Chip, Slash, Monogram, SectionHead, Live } from "./blueprint";
+import { BPFrame, Chip, Slash, SectionHead, Live } from "./blueprint";
 import type { Profile, DevlogPost } from "./data";
 import {
   requestBooking,
@@ -565,13 +566,24 @@ export function ResumeBand({ profile }: { profile: Profile }) {
 }
 
 /* ===== Footer ===== */
-export function Footer({ profile }: { profile: Profile }) {
+export function Footer({ profile, theme }: { profile: Profile; theme?: string }) {
   return (
     <footer style={{ position: "relative", padding: "48px 0 32px", background: "var(--bg)" }}>
       <div className="wrap">
         <div className="footer-grid">
           <div>
-            <Monogram size={36} />
+            <Image
+              src="/logo.png"
+              alt="cakeintech"
+              width={4199}
+              height={3045}
+              style={{
+                height: 48,
+                width: "auto",
+                filter: theme === "dark" ? "invert(1)" : "none",
+                transition: "filter 0.2s",
+              }}
+            />
             <div style={{ marginTop: 14, fontSize: 13, color: "var(--ink-2)", maxWidth: 280, lineHeight: 1.55 }}>
               cakeintech — built and maintained from Addis Ababa. Every section editable via the CMS.
             </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Live } from "./blueprint";
 
@@ -43,15 +44,24 @@ export function Nav({
           href="#hero"
           onClick={(e) => { e.preventDefault(); scrollTo("hero"); }}
           style={{
-            display: "flex", alignItems: "center", gap: 12,
-            paddingRight: 24,
-            fontWeight: 600, letterSpacing: "0.02em", flex: "0 0 auto",
-            textDecoration: "none", color: "inherit",
+            display: "flex", alignItems: "center",
+            paddingRight: 24, flex: "0 0 auto",
+            textDecoration: "none",
           }}
         >
-          <span style={{ fontSize: 14 }}>
-            CAKE<span style={{ color: "var(--ink-3)" }}>·</span>INTECH
-          </span>
+          <Image
+            src="/logo.png"
+            alt="cakeintech"
+            width={4199}
+            height={3045}
+            priority
+            style={{
+              height: 44,
+              width: "auto",
+              filter: theme === "dark" ? "invert(1)" : "none",
+              transition: "filter 0.2s",
+            }}
+          />
         </a>
 
         {/* Desktop nav */}
